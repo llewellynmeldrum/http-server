@@ -1,4 +1,4 @@
-# HTTP Server (C)
+# HTTP Server
 
 Currently, just serves the user an index.html upon visiting the homepage, and a 404 error if a request is made for a file which does not exist.
 
