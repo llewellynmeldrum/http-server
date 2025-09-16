@@ -2,12 +2,14 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
+#include <sys/stat.h>
 #include <string.h>
 #include <unistd.h>
 
 #include "http_response.h"
 #include "http_consts.h"
 #include "log.h"
+#define MAX_FILE_SIZE_B (ssize_t)(1e7)
 
 static char *get_mime_type(char* filename);
 
@@ -30,7 +32,59 @@ char *serialize_http_response(http_response_cfg c) {
 	        c.mime_type,
 	        c.msg_body
 	       );
+
+	if (c.malloced_body) free(c.msg_body);
+
 	return buf;
+}
+
+ssize_t syscall_file_size(const char* filename){
+	struct stat s;
+	stat(filename, &s);
+	return s.st_size;
+}
+
+#define logretnull(fmt, ...)do{\
+	logfatal(fmt, ##__VA_ARGS__)\
+	return NULL;\
+	}while(0)
+
+char* read_file(const char* filename){
+	FILE * file_ptr = fopen(filename, "r");
+
+	if (!file_ptr){
+		logfatal("Unable to open file '%s'.\n",filename);
+		return NULL;
+	}
+
+	ssize_t file_size = syscall_file_size(filename);
+	if (file_size==0){
+		logfatal("syscall_file_size(%s) ret=0.\n", filename); 
+		fclose(file_ptr);
+		return NULL;
+	}
+
+	if (file_size>MAX_FILE_SIZE_B){
+		logfatal("Requested file '%s' is too large! (%zu>%zu)\n", filename, file_size, MAX_FILE_SIZE_B);
+		fclose(file_ptr);
+		return NULL;
+	}
+	char* file_contents = malloc(sizeof(char) * file_size);
+	if (!file_contents){
+		logfatal("Unable to alloc buffer for file '%s'.\n",filename);
+		fclose(file_ptr);
+		return NULL;
+	}
+
+	int n_read = fread(file_contents, file_size, 1, file_ptr); 
+	if (n_read!=1){
+		logfatal("Unable to read file contents for file '%s'.\n",filename);
+		free(file_contents);
+		fclose(file_ptr);
+		return NULL;
+	}
+	fclose(file_ptr);
+	return file_contents;
 }
 
 char *build_http_response(char* request_filename) {
@@ -43,7 +97,8 @@ char *build_http_response(char* request_filename) {
 
 	/* 2. Check if file exists*/
 	bool file_exists = access(request_filename, F_OK) == 0;
-	if (!file_exists) {
+	char* file_contents = read_file(request_filename);
+	if (!file_exists || !file_contents) {
 		cfg = HTTP_ERR_NOT_FOUND;
 		return serialize_http_response(cfg);
 	}
@@ -58,7 +113,8 @@ char *build_http_response(char* request_filename) {
 			.status = 200,
 			.reason_phrase = "200: OK",
 			.mime_type = mime_type,
-			.msg_body = "hi"
+			.msg_body = file_contents,
+			.malloced_body = true,
 		};
 		return serialize_http_response(cfg);
 	}

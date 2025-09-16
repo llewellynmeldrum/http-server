@@ -1,5 +1,6 @@
 #include "http_response.h"
 #include "http_consts.h"
+#include <stdbool.h>
 
 const http_response_cfg HTTP_ERR_NOT_FOUND = (http_response_cfg) {
 	.version = HTTP_VERSION,
