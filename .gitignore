@@ -14,4 +14,5 @@
 !.gitignore
 
 #
+*.o
 compile_commands.json
