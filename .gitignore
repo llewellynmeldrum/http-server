@@ -1,0 +1,17 @@
+
+
+# ignore everything
+/*
+# unignore things with extension
+!*.*
+# unignore directories
+!*/
+
+
+#ignore hidden files
+.*
+#unignore this
+!.gitignore
+
+#
+compile_commands.json
