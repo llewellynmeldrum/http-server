@@ -120,7 +120,7 @@ int handle_client(void* arg){
 		goto CLIENT_CLEANUP;
 	}
 
-	log("\nrequest path string --> '%s'\n",request_path);
+	dprintbuf("\nrequest path string:",request_path,strlen(request_path),  0);
 	char* file_name = request_path; // remove %20 spaces and shit later
 	char* response = build_http_response(file_name);
 	free(request_path);

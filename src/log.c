@@ -78,6 +78,7 @@ void dprintbuf(const char* title, const char* buf, ssize_t sz, ssize_t nlines) {
 			log("%c", ch);
 			break;
 		}
+		if (nextch == '\0') log(SET_UNDERBOLD "[\\0]" SET_CLEAR );
 	}
 
 

@@ -89,7 +89,7 @@ char* read_file(const char* filename){
 
 char *build_http_response(char* request_filename) {
 	http_response_cfg cfg;
-	if (strncmp(request_filename, "\\",1)){
+	if (strncmp(request_filename, "/\0",2)==0){
 		// default request, serve index.html 
 		request_filename = "index.html";
 	}
