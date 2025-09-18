@@ -1,7 +1,6 @@
 .PHONY: $(PROG) all clean run debug
 
 # I use some custom banner commands
-SHELL	:= /bin/zsh
 
 PROG	:=httpserver
 CC	:=gcc
