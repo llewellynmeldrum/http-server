@@ -4,6 +4,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <errno.h>
+#include <signal.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
@@ -14,6 +15,7 @@
 
 #define AUTO_FIND_NEWSOCK true
 
+#define PUBLIC_IPV4 "3.105.0.153"
 #define SOCK_ERR -1
 void *handle_client(void* arg);
 
@@ -22,7 +24,7 @@ typedef struct sockaddr sockaddr;
 typedef int FILE_DESCRIPTOR;
 
 FILE_DESCRIPTOR server;
-unsigned short PORT = 49931;
+unsigned short PORT = 80;
 
 static pthread_mutex_t log_mutex;
 static pthread_mutex_t stats_mutex;
@@ -39,6 +41,9 @@ server_stats s_stats = (server_stats) { };
 
 
 void handle_SIGINT();
+
+void echo_avaliableAT();
+void echo_STATS();
 
 // *INDENT-OFF*
 int main(int argc, char** argv) {
@@ -60,17 +65,16 @@ int main(int argc, char** argv) {
 		  .sin_port		= htons(PORT),		// hostToNetworkShort()
 	};
 	err = bind(server, (sockaddr * )&server_addr, sizeof(server_addr));
-	if (err){
-		if (!AUTO_FIND_NEWSOCK) logfatalerrnoexit("Failed to bind socket to port: %hu.\n", PORT);
-		unsigned short newport;
-		while (err){
-			newport = (rand() %(49152-65535)) + 49152;
-//			log("Port %hu failed to bind, testing new port:%hu\n",PORT, newport);
-			server_addr.sin_port = htons(newport);
-			err = bind(server, (sockaddr * )&server_addr, sizeof(server_addr));
-		}
-		PORT = newport;
-//		printf("Suitable port (%hu) found, continuing...\n", PORT);
+	int time_to_sleep = 1;
+	char again_str[9] = "\0";
+	while (err){
+		log("Port %hu failed to bind %s, waiting %ds... \n", PORT, again_str, time_to_sleep);
+		perrno();
+		
+		sleep(time_to_sleep);
+		err = bind(server, (sockaddr * )&server_addr, sizeof(server_addr));
+		time_to_sleep*=2;
+		strcpy(again_str,"again...");
 	}
 
 
@@ -84,14 +88,14 @@ int main(int argc, char** argv) {
 	// 4. handle incoming connections
 
 	bool accepting_connections = true;
-	log("Listening on port %hu...\n", PORT); 
-	log("Avaliable at: http://127.0.0.1:%hu\n",PORT);
 	pthread_t client_handler_thread;
 	while(accepting_connections){
 		// 1. init client file descriptor
 		sockaddr_in client_addr;
 		socklen_t client_addr_len = sizeof(client_addr);
 		FILE_DESCRIPTOR * client= malloc(sizeof(FILE_DESCRIPTOR)); // 2. listen for client connections - accept blocks the thread until it finds one 
+		echo_avaliableAT();
+		if (!client) logfatalexit("Unable to allocate memory for client FD!\n");
 		*client = accept(server, (sockaddr*)&client_addr, &client_addr_len);
 		if (*client==SOCK_ERR){
 			logfatalerrno("Unable to accept client connection:\n");
@@ -161,10 +165,8 @@ void* handle_client(void* arg){
 CLIENT_CLEANUP:
 	close(client);
 	free(buf);
-	log("Listening on port %hu...\n", PORT); 
-	log("Avaliable at: http://127.0.0.1:%hu\n",PORT);
-	log("%.30s\t%zu/%zu\n","Requests sent/received",  s_stats.results_sent, s_stats.requests_received);
-	log("%.30s\t%zu/%zu\n","Bytes sent/received", s_stats.bytes_sent, s_stats.bytes_received);
+	echo_avaliableAT();
+	echo_STATS();
 
 	return NULL;
 }
@@ -174,4 +176,14 @@ void handle_SIGINT() {
 	int opt = 1;
 	setsockopt(server, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
 	logexit(EXIT_SUCCESS);
+}
+
+void echo_avaliableAT(){
+	log("Listening on port %hu...\n", PORT); 
+	log("Avaliable at: http://%s:%hu\n",PUBLIC_IPV4, PORT);
+}
+
+void echo_STATS(){
+	log("%.30s\t%zu/%zu\n","Requests sent/received",  s_stats.results_sent, s_stats.requests_received);
+	log("%.30s\t%zu/%zu\n","Bytes sent/received", s_stats.bytes_sent, s_stats.bytes_received);
 }
