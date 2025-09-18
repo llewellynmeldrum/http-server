@@ -1,9 +1,9 @@
 # HTTP Server
 
 This is an extremely barebones `HTTP/1.1` web server built in C, using `sockets.h` and pretty much nothing else. 
-The server binary runs on an [AWS EC2 VPS](https://aws.amazon.com/ec2/), running Ubuntu, which handles routing for me. For more details check [here](#aws-ec2-instance)
+The server binary runs on an [AWS EC2 VPS](https://aws.amazon.com/ec2/), which handles routing for me. For more details check [here](#aws-ec2-instance)
 
-
+## Current capabilities:
 - It can serve `GET` requests for any files that exist in the working directory, and plans to support `HEAD` very soon (tm).
 - It currently only supports `200 OK` and `404 ERROR` responses, the latter for anything that cannot be found in the working directory.
 - It will soon have some css/javascript, but right now just serves a very plain `index.html`.
@@ -16,7 +16,9 @@ The server binary runs on an [AWS EC2 VPS](https://aws.amazon.com/ec2/), running
 **DOWN.** Working on deployment/build process to the server. Will perhaps have a permanent binary running in the background soon.
 
 
-# AWS EC2 INSTANCE:
+### AWS EC2 INSTANCE:
+The EC2 instance is accessed from the AWS console, and provides you with a very barebones setup of your chosen operating system, as well as the means to ssh in and do whatever you want. I've 
+
 **VPS Information:**
 ---
 
