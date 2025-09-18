@@ -3,7 +3,7 @@
 HOST		:=ubuntu@3.105.0.153 
 SSH_KEY		:=~/lmeldrum_dev.pem
 SSH     	:= ssh -i $(SSH_KEY) $(HOST)
-DEPLOY_BR	:= deploy
+DEPLOY_BRANCH	:= deploy
 RUN_MODE	:= systemd
 SERVICE		:= http-server.service
 
