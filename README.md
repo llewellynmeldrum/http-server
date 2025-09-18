@@ -52,22 +52,6 @@ Firmware Version: 1.0
 
 # DEPLOYMENT
 
-```systemd
-[Unit]
-Description=Http-server, using deploy branch
-After=network.target
-
-[Service]
-User=ubuntu
-WorkingDirectory=/home/ubuntu/http-server
-ExecStart=/home/ubuntu/http-server/httpserver
-Restart=on-failure
-
-[Install]
-WantedBy=multi-user.target
-```
-
-
 Im currently building out the deployment, but it will most likely just be a makefile which runs some commands through ssh to build and deploy the binary on the server.
 
 # CREDIT:
