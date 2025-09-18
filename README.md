@@ -27,6 +27,16 @@ The EC2 instance is accessed from the AWS console, and provides you with a very 
 
 The VPS has `fail2ban`, `gcc`, `make`, and the prior mentioned `nvim` and `fastfetch`. Thats about it. It has like 2G of ram so i'm trying to keep it light.
 
+I set up the VPS with an 'elastic' IP address, which is just some sort of weird static IP address. 
+
+Using the Security Groups feature, I created a group which accepts two types of TCP connections:
+- ANY coming from port 80, to allow for anyone to make HTTP requests,
+- ANY devices in my home network on port 22, to make SSH connections.
+
+This means the only real layer of security I have from DDOS or anything along those lines is fail2ban. 
+
+Since there are no forms or databases on the website, and much less anything private or important, I think this is fine.
+
 #### VPS Specs:
 
 ```python
@@ -40,10 +50,9 @@ Firmware Version: 1.0
     Firmware Age: 6y 10month 2w 3d
 ```
 
-I set up the VPS with an 'elastic' IP address, which is just some sort of weird static IP address. 
 
 
 Im currently building out the deployment, but it will most likely just be a makefile which runs some commands through ssh to build and deploy the binary on the server.
 
 # CREDIT:
-Credit to [this article](https://dev.to/jeffreythecoder/how-i-built-a-simple-http-server-from-scratch-using-c-739) for the inspiration/structure of the core of the socket logic.
+Credit to [this article](https://dev.to/jeffreythecoder/how-i-built-a-simple-http-server-from-scratch-using-c-739) for the inspiration, and for the core of the socket logic.
