@@ -12,97 +12,45 @@
 #include "log.h"
 #include "http_consts.h"
 #include "http_response.h"
+#include "socket_helper.h"
+#include "server_types.h"
+#include "myutils.h"
 
-#define AUTO_FIND_NEWSOCK true
+static const char *EC2_INSTANCE_IPV4 =  "3.105.0.153";
+static const unsigned int HTTP_TCP_PORT = 80;
 
-#define PUBLIC_IPV4 "3.105.0.153"
-#define SOCK_ERR -1
-void *handle_client(void* arg);
+static ServerStats stats = (ServerStats) { };
+static ServerConfig config;
 
-typedef struct sockaddr_in sockaddr_in;
-typedef struct sockaddr sockaddr;
-typedef int FILE_DESCRIPTOR;
+static void handle_SIGINT();
+static void init_config(int argc, char** argv);
+static void init_socket();
+static void init_threads();
 
-FILE_DESCRIPTOR server;
-unsigned short PORT = 80;
+static void *handle_client(void* arg);
 
-static pthread_mutex_t log_mutex;
-static pthread_mutex_t stats_mutex;
-
-typedef struct server_stats {
-	ssize_t requests_received;
-	ssize_t bytes_received;
-
-	ssize_t results_sent;
-	ssize_t bytes_sent;
-} server_stats;
-
-server_stats s_stats = (server_stats) { };
-
-
-void handle_SIGINT();
-
-void echo_avaliableAT();
-void echo_STATS();
-
-// *INDENT-OFF*
 int main(int argc, char** argv) {
-	pthread_mutex_init(&log_mutex, NULL);
-	pthread_mutex_init(&stats_mutex, NULL);
-	int err;
-
-	// 1. create the socket as a file descriptor
-	server = socket(AF_INET, SOCK_STREAM, 0);
-	if (server == SOCK_ERR) logfatalexit("Unable to create socket.\n");
-
 	signal(SIGINT, handle_SIGINT);
 
-
-	// 2. configure the socket to listen on PORT, on ANY interface, and using ipv4. 
-	sockaddr_in server_addr = (sockaddr_in) {
-		.sin_family 		= AF_INET,		// ipv4
-		 .sin_addr.s_addr 	= INADDR_ANY, 		// all interfaces
-		  .sin_port		= htons(PORT),		// hostToNetworkShort()
-	};
-	err = bind(server, (sockaddr * )&server_addr, sizeof(server_addr));
-	int time_to_sleep = 1;
-	char again_str[9] = "\0";
-	while (err){
-		log("Port %hu failed to bind %s, waiting %ds... \n", PORT, again_str, time_to_sleep);
-		perrno();
-		
-		sleep(time_to_sleep);
-		err = bind(server, (sockaddr * )&server_addr, sizeof(server_addr));
-		time_to_sleep*=2;
-		strcpy(again_str,"again...");
-	}
-
-
-
-	// 3. begin listening, using the configuration specified above
-	//
-	err = listen(server, SOCK_QUEUE_LIMIT);
-	if (err) logfatalexit("Unable to start listening for connections.\n");
-
-
-	// 4. handle incoming connections
+	init_config(argc, argv);
+	init_socket();
+	init_threads();
 
 	bool accepting_connections = true;
-	pthread_t client_handler_thread;
-	while(accepting_connections){
-		// 1. init client file descriptor
+	while(accepting_connections) {
 		sockaddr_in client_addr;
 		socklen_t client_addr_len = sizeof(client_addr);
-		FILE_DESCRIPTOR * client= malloc(sizeof(FILE_DESCRIPTOR)); // 2. listen for client connections - accept blocks the thread until it finds one 
-		echo_avaliableAT();
+		FILE_DESCRIPTOR * client = malloc(sizeof(FILE_DESCRIPTOR)); // 2. listen for client connections - accept blocks the thread until it finds one
+		log(FSTR_AVALIABLE_AT(config));
 		if (!client) logfatalexit("Unable to allocate memory for client FD!\n");
-		*client = accept(server, (sockaddr*)&client_addr, &client_addr_len);
-		if (*client==SOCK_ERR){
+		*client = accept(config.server_fd, (sockaddr*)&client_addr, &client_addr_len);
+		if (*client == SOCK_ERR) {
 			logfatalerrno("Unable to accept client connection:\n");
-			free(client);	
+			free(client);
 			logexit(EXIT_FAILURE);
 		}
 
+		// dispatch and detach thread
 		pthread_create(&client_handler_thread, NULL, handle_client, (void*)client);
 		pthread_detach(client_handler_thread);
 	}
@@ -110,54 +58,54 @@ int main(int argc, char** argv) {
 	logexit(EXIT_SUCCESS);
 }
 
-void* handle_client(void* arg){
-	char* buf = malloc(BUF_SZ);
-	FILE_DESCRIPTOR client = *(int*)arg; 
+void *handle_client(void* arg) {
+	char *buf = malloc(BUF_SZ);
+	FILE_DESCRIPTOR client = *(int*)arg;
 	ssize_t bytes_received = recv(client, buf, BUF_SZ, 0);
-	if (bytes_received<=0){
-		logwarning("Connection made with client, but <=0 bytes (%zu) receieved.\n",bytes_received);
+	if (bytes_received <= 0) {
+		logwarning("Connection made with client, but <=0 bytes (%zu) receieved.\n", bytes_received);
 		goto CLIENT_CLEANUP;
 	}
 
 	pthread_mutex_lock(&stats_mutex);
-		s_stats.bytes_received += bytes_received;
-		++s_stats.requests_received;
+	stats.bytes_received += bytes_received;
+	++stats.requests_received;
 	pthread_mutex_unlock(&stats_mutex);
 
-	log("Recieved %zu bytes from client.\n",bytes_received);
-	log("%s",buf);
+	log("Recieved %zu bytes from client.\n", bytes_received);
+	log("%s", buf);
 	pretty_print_buffer("RECEIVED MESSAGE", buf, 0);
 
-	char* request_path= malloc(sizeof(char) * BUF_SZ); // this doesnt need dynamic memory allocation
-	if (!request_path){
+	char *request_path = malloc(sizeof(char) * BUF_SZ); // this doesnt need dynamic memory allocation
+	if (!request_path) {
 		logfatal("Unable to alloc buffer for request_path!\n");
 		goto CLIENT_CLEANUP;
 	}
 
 	int count = sscanf(buf, "GET %s HTTP/1.1", request_path);
-	if (count!=1){
+	if (count != 1) {
 		logfatal("Message above has poorly formatted header.\n")
 		goto CLIENT_CLEANUP;
 	}
 
-	pretty_print_buffer("\nrequest path string:",request_path, 0);
-	char* file_name = request_path; // remove %20 spaces and shit later
-	char* response = build_http_response(file_name);
+	pretty_print_buffer("\nrequest path string:", request_path, 0);
+	char *file_name = request_path; // remove %20 spaces and shit later
+	char *response = build_http_response(file_name);
 	ssize_t response_len = strlen(response);
 	free(request_path);
 	pretty_print_buffer("SENDING MESSAGE", response, 0);
 	// make 0 lc print them all and not show that stupid 2nd part of the message
 
-	log("\nsending response...\n%s",response);
+	log("\nsending response...\n%s", response);
 
 	ssize_t bytes_sent = send(client, response, strlen(response), 0);
-	if (bytes_sent==SOCK_ERR){
+	if (bytes_sent == SOCK_ERR) {
 		logfatalerrno("Failed to send above http response!!\n");
 	} else {
-		log("Succesfully sent (%zu) bytes in response!\n",bytes_sent);
+		log("Succesfully sent (%zu) bytes in response!\n", bytes_sent);
 		pthread_mutex_lock(&stats_mutex);
-			s_stats.bytes_sent += response_len;
-			++s_stats.results_sent;
+		stats.bytes_sent += response_len;
+		++stats.results_sent;
 		pthread_mutex_unlock(&stats_mutex);
 	}
 	free(response);
@@ -165,8 +113,8 @@ void* handle_client(void* arg){
 CLIENT_CLEANUP:
 	close(client);
 	free(buf);
-	echo_avaliableAT();
-	echo_STATS();
+	log(FSTR_AVALIABLE_AT(config));
+	log(FSTR_STATS(stats));
 
 	return NULL;
 }
@@ -174,16 +122,83 @@ CLIENT_CLEANUP:
 void handle_SIGINT() {
 	log("<-- handling SIGINT.\n");
 	int opt = 1;
-	setsockopt(server, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+	setsockopt(config.server_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
 	logexit(EXIT_SUCCESS);
 }
 
-void echo_avaliableAT(){
-	log("Listening on port %hu...\n", PORT); 
-	log("Avaliable at: http://%s:%hu\n",PUBLIC_IPV4, PORT);
+void init_config(int argc, char** argv) {
+	int num_args = argc - 1;
+	// set defaults
+	config.is_localhost = false,
+	strcpy(config.ipv4_str, EC2_INSTANCE_IPV4);
+	config.port = HTTP_TCP_PORT,
+	config.sock_addr = (sockaddr_in) {
+		.sin_family 		= AF_INET,
+		 .sin_addr.s_addr 	= INADDR_ANY,
+		  .sin_port 		= htons(HTTP_TCP_PORT),
+	};
+
+	// check args
+	switch (num_args) {
+	case 1:
+		if (streq(argv[1], "-l") || streq(argv[1], "--local")) {
+			config.is_localhost = true;
+		} else if (streq(argv[1], "-h") || streq(argv[1], "-?") || streq(argv[1], "--help")) {
+			log(STR_USAGE);
+			logexit(EXIT_SUCCESS);
+		}
+		break;
+	case 0:
+		config.is_localhost = false;
+		break;
+	default:
+		logfatalexit("Unknown args passed, usage: \n %s %s\n", argv[0], STR_USAGE);
+		break;
+	}
+
+
+	// make alterations from default
+	if (config.is_localhost) {
+		log(SET_BOLD "Localhost mode selected! localhost:random_port will be used." SET_CLEAR "\n\n");
+		strcpy(config.ipv4_str, "127.0.0.1");
+		config.port = 49152;
+		config.sock_addr.sin_port = htons(config.port);
+	}
+
 }
 
-void echo_STATS(){
-	log("%.30s\t%zu/%zu\n","Requests sent/received",  s_stats.results_sent, s_stats.requests_received);
-	log("%.30s\t%zu/%zu\n","Bytes sent/received", s_stats.bytes_sent, s_stats.bytes_received);
+void handle_socket_bind_err(SOCK_STATUS bind_status) {
+	log("looking\n");
+	if (config.is_localhost) {
+		while(bind_status == SOCK_ERR) {
+			config.port = RAND_RANGE(49152, 65535);
+			config.sock_addr.sin_port = htons(config.port);
+			bind_status = bind(config.server_fd, (sockaddr * )&config.sock_addr, sizeof(config.sock_addr));
+		}
+	} else {
+		int time_to_sleep = 5;
+		log("Port %hu failed to bind. \n", config.sock_addr.sin_port);
+		while (bind_status == SOCK_ERR) {
+			log("Trying again in %ds... \n", time_to_sleep);
+			perrno();
+			sleep(time_to_sleep);
+			bind_status = bind(config.server_fd, (sockaddr * )&config.sock_addr, sizeof(config.sock_addr));
+			time_to_sleep *= 2;
+		}
+	}
+}
+
+void init_socket() {
+	config.server_fd = socket(AF_INET, SOCK_STREAM, 0);
+	if (config.server_fd == SOCK_ERR) logfatalexit("Unable to create socket.\n");
+
+	SOCK_STATUS bind_status = bind(config.server_fd, (sockaddr * )&config.sock_addr, sizeof(config.sock_addr));
+	if (bind_status == SOCK_ERR) handle_socket_bind_err(bind_status);
+
+	SOCK_STATUS listen_status = listen(config.server_fd, SOCK_QUEUE_LIMIT);
+	if (listen_status == SOCK_ERR) logfatalexit("Unable to start listening for connections.\n");
+}
+
+void init_threads() {
+	pthread_mutex_init(&stats_mutex, NULL);
 }
