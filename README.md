@@ -21,7 +21,7 @@ The server binary runs on an [AWS EC2 VPS](https://aws.amazon.com/ec2/), which h
 <br>
 
 # AWS EC2 INSTANCE:
-The EC2 instance is accessed from the AWS console, and provides you with a very barebones setup of your chosen operating system, as well as the means to `ssh` in and do whatever you want. I chose Ubuntu, and added a couple **"essentials"**, after setting up my `ssh` keys.
+EC2 provides you with a barebones image of your chosen operating system, as well as the means to `ssh` in and do whatever you want. I chose Ubuntu, and added a couple **"essentials"**, after setting up my `ssh` keys.
 
 <img src="resources/ec2-ssh.png" alt="ssh into the terminal showing neofetch" width="400">
 
@@ -51,22 +51,6 @@ Firmware Version: 1.0
 ```
 
 # DEPLOYMENT
-
-```systemd
-[Unit]
-Description=Http-server, using deploy branch
-After=network.target
-
-[Service]
-User=ubuntu
-WorkingDirectory=/home/ubuntu/http-server
-ExecStart=/home/ubuntu/http-server/httpserver
-Restart=on-failure
-
-[Install]
-WantedBy=multi-user.target
-```
-
 
 Im currently building out the deployment, but it will most likely just be a makefile which runs some commands through ssh to build and deploy the binary on the server.
 
