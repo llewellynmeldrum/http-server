@@ -1,117 +1,94 @@
-
-
-HOST		:=ubuntu@3.105.0.153 
-SSH_KEY		:=~/lmeldrum_dev.pem
-SSH     	:= ssh -i $(SSH_KEY) $(HOST)
-DEPLOY_BR	:= deploy
-RUN_MODE	:= systemd
-SERVICE		:= http-server.service
-
-define REMOTE_HEREDOC
-$(SSH) bash -s <<'EOS'
-set -euo
-
-cd $(APP_DIR)
-
-git fetch origin                               # fetch latest refs but don't merge
-git checkout -B $(DEPLOY_BRANCH) origin/$(DEPLOY_BRANCH) || true
-# Above: ensure a local $(DEPLOY_BRANCH) exists and tracks the remote deploy branch
-
-git reset --hard origin/$(DEPLOY_BRANCH)
-# Force the working tree to exactly match the remote deploy branch
-# (discarding any accidental edits on the server)
-
-make -j build
-# -j: parallel compile
-
-sudo systemctl restart $(SERVICE)
-EOS
-endef
-
-
-.PHONY: deploy push-deploy remote-deploy start stop restart logs shell help
-
-
-deploy: push-deploy remote-deploy 
-	@echo "Deployed HEAD to $(HOST):$(APP_DIR) via branch '$(DEPLOY_BRANCH)'."
-
-push-deploy: 
-	@git rev-parse --verify HEAD >/dev/null   # sanity check: we are in a git repo
-	git push origin HEAD:refs/heads/$(DEPLOY_BRANCH)
-	# This creates/updates the remote 'deploy' branch to your current commit
-
-remote-deploy:
-	$(REMOTE_HEREDOC)
-
-start: 
-	$(SSH) "sudo systemctl start $(SERVICE)"
-
-stop:
-	$(SSH) "sudo systemctl stop $(SERVICE)"
-
-restart: 
-	$(SSH) "sudo systemctl restart $(SERVICE)"
-
-logs: 
-	$(SSH) "sudo journalctl -u $(SERVICE) -n 200 -f"
-
-shell: 
-	$(SSH)
-
-help: 
-	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | \
-		awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-18s\033[0m %s\n", $$1, $$2}'
-
-
-
-
-## RUNS ON THE SERVER 
-
-PROG	:=httpserver
-CC	:=gcc
-CFLAGS	:=-Wall -Iinclude -O2
+# -------- build rules (used on the SERVER) --------
+PROG	:= httpserver
+CC	:= gcc
+CFLAGS	:= -Wall -Iinclude -O2
 LDFLAGS :=
-SRC 	:=$(wildcard src/*.c)
-OBJS	:=$(SRC:.c=.o)
+SRC 	:= $(wildcard src/*.c)
+OBJS	:= $(SRC:.c=.o)
 
-
-FMT_RESET:=		tput sgr0
-FMT_REDBANNER	:=tput rev; tput bold; tput setaf 1
-FMT_GREENBANNER	:=tput rev; tput bold; tput setaf 2
-FMT_YELLOWBANNER:=tput rev; tput bold; tput setaf 3
-FMT_REV:=tput rev; tput bold; 
+FMT_RESET          := tput sgr0 2>/dev/null || true
+FMT_REDBANNER      := tput rev; tput bold; tput setaf 1 2>/dev/null || true
+FMT_GREENBANNER    := tput rev; tput bold; tput setaf 2 2>/dev/null || true
+FMT_YELLOWBANNER   := tput rev; tput bold; tput setaf 3 2>/dev/null || true
+FMT_REV            := tput rev; tput bold 2>/dev/null || true
 
 build: $(PROG)
 
-#compile .c into .o (compilation proper)
+# compile .c into .o (compilation proper)
 %.o : %.c
 	@$(FMT_GREENBANNER)
-	@echo " COMPILE SRC -> OBJ  > " 
+	@echo " COMPILE SRC -> OBJ  > "
 	@$(FMT_RESET)
 	$(CC) $(CFLAGS) -c $< -o $@
 	@printf "\n"
 
-# build executable (linking)
-$(PROG): $(OBJS) 
+# link to final executable
+$(PROG): $(OBJS)
 	@$(FMT_YELLOWBANNER)
 	@echo " LINKING OBJ -> BIN  > "
 	@$(FMT_RESET)
 	$(CC) $(LDFLAGS) $(OBJS) -o $(PROG) $(LDLIBS)
 	@printf "\n"
 
-# RUN PROGRAM - DEFINE A:= ANY PROGRAM_ARGS
-run: $(PROG)
+# run locally (handy if you ever do a local build)
+run-local: $(PROG)
 	@$(FMT_REDBANNER)
-	@echo " EXECUTING BINARY: " 
+	@echo " EXECUTING BINARY (LOCALHOST BUILD): "
 	@$(FMT_RESET)
-	./$(PROG) $(A)
+	./$(PROG) -l $(A)
 	@printf "\n"
 
-# DEBUG PROGRAM
 debug: $(PROG)
-	lldb -o run -- $(PROG) $(TERM_COLS) $(A)
-clean: 
+	lldb -o run -- $(PROG) $(A)
+
+clean:
 	@$(FMT_REV)
 	@echo " REMOVING EXECUTABLES AND OBJECT FILES... "
 	@$(FMT_RESET)
 	rm -f $(PROG) $(OBJS)
+
+# REMOTE STUFF
+REMOTE_DIR := /home/ubuntu/http-server
+TMUX_SESSION    := http-server-tmux 
+REMOTE_BIN := ./httpserver 
+
+# SSH 
+HOST       := ubuntu@3.105.0.153
+SSH_KEY    := /Users/llewie/lmeldrum_dev.pem
+SSH := ssh -i $(SSH_KEY) $(HOST)
+
+RSYNC_CONF  := rsync -az -e "ssh -i $(SSH_KEY) -o IdentitiesOnly=yes" \
+        --delete --exclude '.git' --exclude 'build/' --exclude '*.o'
+.PHONY: deploy sync run-remote stop logs shell
+
+# One-liner you’ll use most: copy → build on server → (re)start in tmux
+deploy: sync run-remote
+
+# Copy your working tree to the server (fast: only deltas)
+sync:
+	$(RSYNC_CONF) ./ $(HOST):$(REMOTE_DIR)/
+
+# Build and (re)start ON THE SERVER (never builds locally)
+run-remote:
+	$(SSH) "set -e; cd $(REMOTE_DIR); \
+		make -j build; \
+		tmux kill-session -t $(TMUX_SESSION) 2>/dev/null || true; \
+		tmux new -d -s $(TMUX_SESSION) 'cd $(REMOTE_DIR) && sudo $(REMOTE_BIN) $(A) 2>server.err.log'; \
+		echo 'running in tmux: $(TMUX_SESSION). stderr -> server.err.log'"
+	$(SSH) "tail -f $(REMOTE_DIR)/server.err.log"
+
+# Stop the server cleanly
+stop:
+	$(SSH) "tmux kill-session -t $(TMUX_SESSION) 2>/dev/null || pkill -f '$(REMOTE_BIN)' || true; echo ' stopped'"
+
+# Quick peek at output (for live tail: `make shell` then `tmux attach -t app`)
+logs:
+	$(SSH) "tail -f $(REMOTE_DIR)/server.err.log"
+
+# Jump into the box
+shell:
+	$(SSH)
+
+
+# Perhaps change te commands to scripts?
+# Would like to see stderr directly.
