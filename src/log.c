@@ -15,7 +15,7 @@
 	log("(" SET_UNDERBOLD symbol SET_CLEAR ")='" SET_PURPLE repl SET_CLEAR "', ");\
 	}while(0);
 
-bool ppbuffer_called = false;
+bool show_pretty_print_guide = true;
 
 ssize_t GET_TERM_COLS() {
 	struct winsize w;
@@ -85,34 +85,12 @@ void dprintbuf(const char* title, const char* buf, ssize_t sz, ssize_t nlines) {
 	if (lc <= nlines) log("\n");
 	LOG_LOWER_SEPARATOR();
 	log("\n");
-	if (!ppbuffer_called) {
+	if (show_pretty_print_guide) {
 		log(SET_CLEAR);
 		LOG_SYMBOL_REPL(" ", "SPACE");
 		LOG_SYMBOL_REPL("↓", "\\n");
 		LOG_SYMBOL_REPL("↵", "\\r");
 		log("\n");
-		ppbuffer_called = true;
+		show_pretty_print_guide = false;
 	}
-}
-void LOG_DEBUG(const char* fmt, ...) {
-	/* within fmt, just go char by char and replace any and all '\' with '\\'*/
-
-	char buf[256];
-	va_list args;
-	va_start(args, fmt);
-	vsprintf(buf, fmt, args);
-	va_end(args);
-	char ch = '1';
-	for (int i = 0; ch != '\0'; i++) {
-		ch = *(buf + i);
-		switch (ch) {
-		case '\n':
-			log("␊\n");
-			break;
-		default:
-			log("%c", ch);
-		}
-	}
-// TEMP
-	log("strlen(log)=%zu", strlen(buf));
 }

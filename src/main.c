@@ -42,7 +42,7 @@ int main(int argc, char** argv) {
 		socklen_t client_addr_len = sizeof(client_addr);
 		FILE_DESCRIPTOR * client = malloc(sizeof(FILE_DESCRIPTOR)); // 2. listen for client connections - accept blocks the thread until it finds one
 		log(FSTR_AVALIABLE_AT(config));
-		if (!client) logfatalexit("Unable to allocate memory for client FD!\n");
+		if (!client) logfatal_exit("Unable to allocate memory for client FD!\n");
 		*client = accept(config.server_fd, (sockaddr*)&client_addr, &client_addr_len);
 		if (*client == SOCK_ERR) {
 			logfatalerrno("Unable to accept client connection:\n");
@@ -58,12 +58,14 @@ int main(int argc, char** argv) {
 	logexit(EXIT_SUCCESS);
 }
 
+
 void *handle_client(void* arg) {
-	char *buf = malloc(BUF_SZ);
+	/* 0. SETUP, UPDATE STATS */
+	char *request_data = malloc(BUF_SZ);
 	FILE_DESCRIPTOR client = *(int*)arg;
-	ssize_t bytes_received = recv(client, buf, BUF_SZ, 0);
+	ssize_t bytes_received = recv(client, request_data, BUF_SZ, 0);
 	if (bytes_received <= 0) {
-		logwarning("Connection made with client, but <=0 bytes (%zu) receieved.\n", bytes_received);
+		logfatal("Connection made with client, but <=0 bytes (%zu) receieved.\n", bytes_received);
 		goto CLIENT_CLEANUP;
 	}
 
@@ -72,47 +74,33 @@ void *handle_client(void* arg) {
 	++stats.requests_received;
 	pthread_mutex_unlock(&stats_mutex);
 
-	log("Recieved %zu bytes from client.\n", bytes_received);
-	log("%s", buf);
-	pretty_print_buffer("RECEIVED MESSAGE", buf, 0);
+	log("Recieved %zuB from client.\n", bytes_received);
+	pretty_print_buffer("RECEIVED MESSAGE", request_data, 0);
 
-	char *request_path = malloc(sizeof(char) * BUF_SZ); // this doesnt need dynamic memory allocation
-	if (!request_path) {
-		logfatal("Unable to alloc buffer for request_path!\n");
+
+	http_request request = parse_http_request(request_data, bytes_received);
+	http_response response = build_http_response(request);
+
+	if (!response.data) {
+		logfatal("Unable to build valid response!\n");
 		goto CLIENT_CLEANUP;
 	}
 
-	int count = sscanf(buf, "GET %s HTTP/1.1", request_path);
-	if (count != 1) {
-		logfatal("Message above has poorly formatted header.\n")
-		goto CLIENT_CLEANUP;
-	}
-
-	pretty_print_buffer("\nrequest path string:", request_path, 0);
-	char *file_name = request_path; // remove %20 spaces and shit later
-	char *response = build_http_response(file_name);
-	ssize_t response_len = strlen(response);
-	free(request_path);
-	pretty_print_buffer("SENDING MESSAGE", response, 0);
-	// make 0 lc print them all and not show that stupid 2nd part of the message
-
-	log("\nsending response...\n%s", response);
-
-	ssize_t bytes_sent = send(client, response, strlen(response), 0);
+	ssize_t bytes_sent = send(client, response.data, response.len, 0);
 	if (bytes_sent == SOCK_ERR) {
 		logfatalerrno("Failed to send above http response!!\n");
 	} else {
 		log("Succesfully sent (%zu) bytes in response!\n", bytes_sent);
 		pthread_mutex_lock(&stats_mutex);
-		stats.bytes_sent += response_len;
+		stats.bytes_sent += response.len;
 		++stats.results_sent;
 		pthread_mutex_unlock(&stats_mutex);
 	}
-	free(response);
+	free(response.data);
 
 CLIENT_CLEANUP:
 	close(client);
-	free(buf);
+	free(request_data);
 	log(FSTR_AVALIABLE_AT(config));
 	log(FSTR_STATS(stats));
 
@@ -120,7 +108,7 @@ CLIENT_CLEANUP:
 }
 
 void handle_SIGINT() {
-	log("<-- handling SIGINT.\n");
+	log("<- handling SIGINT.\n");
 	int opt = 1;
 	setsockopt(config.server_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
 	logexit(EXIT_SUCCESS);
@@ -152,7 +140,7 @@ void init_config(int argc, char** argv) {
 		config.is_localhost = false;
 		break;
 	default:
-		logfatalexit("Unknown args passed, usage: \n %s %s\n", argv[0], STR_USAGE);
+		logfatal_exit("Unknown args passed, usage: \n %s %s\n", argv[0], STR_USAGE);
 		break;
 	}
 
@@ -180,7 +168,7 @@ void handle_socket_bind_err(SOCK_STATUS bind_status) {
 		log("Port %hu failed to bind. \n", config.sock_addr.sin_port);
 		while (bind_status == SOCK_ERR) {
 			log("Trying again in %ds... \n", time_to_sleep);
-			perrno();
+			logerrno();
 			sleep(time_to_sleep);
 			bind_status = bind(config.server_fd, (sockaddr * )&config.sock_addr, sizeof(config.sock_addr));
 			time_to_sleep *= 2;
@@ -190,13 +178,13 @@ void handle_socket_bind_err(SOCK_STATUS bind_status) {
 
 void init_socket() {
 	config.server_fd = socket(AF_INET, SOCK_STREAM, 0);
-	if (config.server_fd == SOCK_ERR) logfatalexit("Unable to create socket.\n");
+	if (config.server_fd == SOCK_ERR) logfatal_exit("Unable to create socket.\n");
 
 	SOCK_STATUS bind_status = bind(config.server_fd, (sockaddr * )&config.sock_addr, sizeof(config.sock_addr));
 	if (bind_status == SOCK_ERR) handle_socket_bind_err(bind_status);
 
 	SOCK_STATUS listen_status = listen(config.server_fd, SOCK_QUEUE_LIMIT);
-	if (listen_status == SOCK_ERR) logfatalexit("Unable to start listening for connections.\n");
+	if (listen_status == SOCK_ERR) logfatal_exit("Unable to start listening for connections.\n");
 }
 
 void init_threads() {

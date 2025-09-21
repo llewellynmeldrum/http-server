@@ -31,7 +31,7 @@ $(PROG): $(OBJS)
 	@printf "\n"
 
 # run locally (handy if you ever do a local build)
-run-local: $(PROG)
+run: $(PROG)
 	@$(FMT_REDBANNER)
 	@echo " EXECUTING BINARY (LOCALHOST BUILD): "
 	@$(FMT_RESET)

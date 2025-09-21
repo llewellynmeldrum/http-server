@@ -9,63 +9,211 @@
 #include "http_response.h"
 #include "http_consts.h"
 #include "log.h"
-#define MAX_FILE_SIZE_B (ssize_t)(1e7)
 
-static char *get_mime_type(char* filename);
-
-
-// windows/network style
-#define NEWL "\r\n"
-// macos/linux style
-//#define NEWL "\n"
-
-// *INDENT-OFF*
-// caller responsible for freeing buffer
-char *serialize_http_response(http_response_cfg c) {
-	char *buf = malloc(sizeof(char) * BUF_SZ);
-	sprintf(buf,
-	        "HTTP/%s %d %s"NEWL\
-	 	"Content-Type: %s"NEWL\
-	 	NEWL\
-		"%s"NEWL,
-	        c.version, c.status, c.reason_phrase,
-	        c.mime_type,
-	        c.msg_body
-	       );
-
-	if (c.malloced_body) free(c.msg_body);
-
-	return buf;
+void destroy_request(http_request req) {
+	free(req.data);
+	//
 }
+#define MAX_FILE_SZ (ssize_t)(1e9) // 1Gb ~(125MB)
+#define MAX_RESPONSE_HEADER_SZ (ssize_t) 1024
 
-ssize_t syscall_file_size(const char* filename){
+static char *parse_mime_type(char* filename);
+static char *read_file(const char* filename, ssize_t file_size);
+static http_response serialize_http_response(http_response_cfg c);
+
+/* we use the windows style for completeness. */
+#define NEWL "\r\n"
+ssize_t syscall_file_size(const char* filename) {
 	struct stat s;
 	stat(filename, &s);
 	return s.st_size;
 }
+
+/*
+typedef struct http_request {
+	char *data;
+	ssize_t data_len;
+	HTTP_METHOD method;
+	HTTP_TARGET target;
+	HTTP_VERSION version;
+	HTTP_FIELD *fields;
+	ssize_t nfields;
+} http_request;
+*/
+
+#define MAX_VERSION_STRLEN 3
+#define MAX_METHOD_STRLEN 32
+#define MAX_TARGET_STRLEN 256
+
+#define MAX_REQUEST_LINE_SZ\
+	MAX_TARGET_STRLEN+\
+	MAX_VERSION_STRLEN+\
+	MAX_METHOD_STRLEN+1
+
+#define MAX_HEADER_FIELD_SZ 128
+#define MAX_HEADER_VALUE_SZ 1024
+// *INDENT-OFF*
+
+static HTTP_METHOD parse_method(char* method_str);
+static HTTP_TARGET parse_target(char* target_str);
+static HTTP_VERSION parse_version(char* version_str);
+
+#define FN_NAME "parse_http_request()"
+http_request parse_http_request(char* data, ssize_t data_len) {
+	http_request req = (http_request){.data = data, .data_len = data_len};
+
+	char *method_str = calloc(MAX_METHOD_STRLEN  +1, sizeof(char));
+	if(!method_str) logfatal_exit(ALLOC_FAILURE(method_str));
+
+	char *target_str = calloc(MAX_TARGET_STRLEN  +1, sizeof(char));
+	if(!target_str) logfatal_exit(ALLOC_FAILURE(method_str));
+
+	char *version_str= calloc(MAX_VERSION_STRLEN +1, sizeof(char));
+	if(!version_str) logfatal_exit(ALLOC_FAILURE(method_str));
+
+	int n = sscanf(data, "%s %s HTTP/%s"NEWL,method_str, target_str, version_str);
+	if (n!=3){
+		logfatal("Unable to parse request.\n");
+		goto PARSE_HTTP_RQ_ERROR;
+	}
+
+	req.method  = 	parse_method(method_str);
+	req.target  = 	parse_target(target_str);
+	req.version =   parse_version(version_str);
+
+	if (req.method == HTTP_METHOD_ERR){
+		logfatal("PARSING FAILURE: Method '%s' not recognised.\n", method_str);
+		goto PARSE_HTTP_RQ_ERROR;
+	}
+
+	if (!req.target.filename || !req.target.mime_type){
+		logfatal("PARSING FAILURE: Filetype of '%s' not recognised.\n", target_str);
+		goto PARSE_HTTP_RQ_ERROR;
+	}
+
+	if (req.version != HTTP_VER_1_1){
+		logfatal("Version '%s' is not supported!\n", version_str);
+		goto PARSE_HTTP_RQ_ERROR;
+	}
+	// for now we just ignore the header-fields because we dont need them
+	free(method_str);
+//	free(target_str); still used later
+	free(version_str);
+	return req;
+
+PARSE_HTTP_RQ_ERROR:
+	free(method_str);
+	//free(target_str);
+	free(version_str);
+	return (http_request) {};
+}
+
+#undef FN_NAME
+http_response build_response_to_GET(http_request request){
+	http_response_cfg GET_response_config;
+	bool file_exists = access(request.target.filename, F_OK) == 0;
+	ssize_t file_size = syscall_file_size(request.target.filename);
+	char *file_contents = read_file(request.target.filename, file_size);
+
+	if (!file_exists || !file_contents) {
+		GET_response_config = HTTP_ERR_NOT_FOUND;
+		return serialize_http_response(GET_response_config);
+	}
+
+	if (!request.target.mime_type) {
+		GET_response_config = HTTP_ERR_BAD_REQUEST;
+		return serialize_http_response(GET_response_config);
+	}
+
+	GET_response_config = (http_response_cfg) {
+		.version = REQUIRED_HTTP_VER_STR,
+		.status = 200,
+		.reason_phrase = "200: OK",
+		.mime_type = request.target.mime_type,
+		.msg_body = file_contents,
+		.malloced_body = true,
+		.body_is_txt = (( strstr(request.target.mime_type,"text/"))!=NULL),
+		.body_size = file_size,
+	};
+	return serialize_http_response(GET_response_config);
+}
+
+http_response build_http_response(http_request request) {
+	log("building response for target --> '%s'\n", request.target.filename);
+	switch (request.method){
+	case HTTP_GET: 	return build_response_to_GET(request); 		break; 
+	case HTTP_METHOD_ERR: 						break;
+	default: 							break;
+	}
+	return (http_response){}; 
+
+}
+
+// *INDENT-OFF*
+// caller responsible for freeing buffer; unless ret null
+#define FN_NAME "serialize_http_response()"
+http_response serialize_http_response(http_response_cfg c) {
+	const ssize_t MAX_RESPONSE_SZ = MAX_RESPONSE_HEADER_SZ + MAX_FILE_SZ;
+
+	char * response_buf = calloc((MAX_RESPONSE_SZ + 1), sizeof(char));
+		log("maxrespone=%zuB \n",MAX_RESPONSE_SZ);
+	if (!response_buf){
+		logfatal(ALLOC_FAILURE("response buffer"));
+		return (http_response){};
+	}
+
+	snprintf(response_buf, MAX_RESPONSE_HEADER_SZ,
+	        "HTTP/%s %d %s"		NEWL\
+	 	"Content-Type: %s"	NEWL\
+	 				NEWL\
+	        ,c.version, c.status, c.reason_phrase, c.mime_type);
+
+	if (!response_buf){
+		logfatal("Unable to write header contents to response buffer!\n");
+		return (http_response){};
+	}
+	if (strnlen(response_buf, MAX_RESPONSE_HEADER_SZ)>=MAX_RESPONSE_HEADER_SZ){
+		logfatal("Header contents are too long! May not have space for msg body.\n");
+		return (http_response){};
+	}
+
+	ssize_t len = strlen(response_buf);
+	if (c.body_is_txt){
+		strlcat(response_buf, c.msg_body, MAX_RESPONSE_SZ+1);
+	} else {
+		memcpy((response_buf+len), c.msg_body, c.body_size);
+	}
+
+	if (c.malloced_body) free(c.msg_body);
+	return (http_response){
+		.data = response_buf,
+		.len = c.body_size+len,
+	};
+}
+#undef FN_NAME
+
 
 #define logretnull(fmt, ...)do{\
 	logfatal(fmt, ##__VA_ARGS__)\
 	return NULL;\
 	}while(0)
 
-char* read_file(const char* filename){
-	FILE * file_ptr = fopen(filename, "r");
+char* read_file(const char* filename, ssize_t file_size){
+	FILE * file_ptr = fopen(filename, "rb");
 
 	if (!file_ptr){
-		logfatal("Unable to open file '%s'.\n",filename);
+		logfatalerrno("Unable to open file '%s'.\n",filename);
 		return NULL;
 	}
 
-	ssize_t file_size = syscall_file_size(filename);
 	if (file_size==0){
 		logfatal("syscall_file_size(%s) ret=0.\n", filename); 
 		fclose(file_ptr);
 		return NULL;
 	}
 
-	if (file_size>MAX_FILE_SIZE_B){
-		logfatal("Requested file '%s' is too large! (%zu>%zu)\n", filename, file_size, MAX_FILE_SIZE_B);
+	if (file_size>MAX_FILE_SZ){
+		logfatal("Requested file '%s' is too large! (%zu>%zu)\n", filename, file_size, MAX_FILE_SZ);
 		fclose(file_ptr);
 		return NULL;
 	}
@@ -87,41 +235,8 @@ char* read_file(const char* filename){
 	return file_contents;
 }
 
-char *build_http_response(char* request_filename) {
-	http_response_cfg cfg;
-	if (strncmp(request_filename, "/\0",2)==0){
-		// default request, serve index.html 
-		request_filename = "index.html";
-	}
-	log("building response for file --> '%s'\n",request_filename);
 
-	/* 2. Check if file exists*/
-	bool file_exists = access(request_filename, F_OK) == 0;
-	char* file_contents = read_file(request_filename);
-	if (!file_exists || !file_contents) {
-		cfg = HTTP_ERR_NOT_FOUND;
-		return serialize_http_response(cfg);
-	}
-
-	char *mime_type = get_mime_type(request_filename);
-	if (!mime_type) {
-		cfg = HTTP_ERR_BAD_REQUEST;
-		return serialize_http_response(cfg);
-	} else {
-		cfg = (http_response_cfg) {
-			.version = HTTP_VERSION,
-			.status = 200,
-			.reason_phrase = "200: OK",
-			.mime_type = mime_type,
-			.msg_body = file_contents,
-			.malloced_body = true,
-		};
-		return serialize_http_response(cfg);
-	}
-	return NULL;
-}
-
-char *get_file_extension(char* filename) {
+char *parse_file_extension(char* filename) {
 	char *first_dot =  strchr(filename, '.');
 	if (strchr(first_dot + 1, '.')) {
 		return NULL;
@@ -131,8 +246,8 @@ char *get_file_extension(char* filename) {
 }
 #define streq(s1, s2) (strcmp(s1, s2)==0)
 
-char *get_mime_type(char* filename) {
-	char *ext = get_file_extension(filename);
+char *parse_mime_type(char* filename) {
+	char *ext = parse_file_extension(filename);
 	if (!ext) {
 		logfatal("GET Request for file (%s) has multiple '.' chars,"
 		         "unable to determine MIME type!\n", filename);
@@ -225,5 +340,34 @@ char *get_mime_type(char* filename) {
 	if (streq(ext, ".jpg")) 	return "image/jpeg";
 	if (streq(ext, ".mid")) 	return "audio/midi";
 	if (streq(ext, ".midi")) 	return "audio/midi";
-	return ext;
+	return NULL;
+}
+
+HTTP_METHOD parse_method(char* method_str){
+	if (!method_str) return HTTP_METHOD_ERR;
+
+	if (streq(method_str, "GET")) 	return HTTP_GET; 
+	if (streq(method_str, "HEAD")) 	return HTTP_HEAD; 
+	else return HTTP_METHOD_ERR;
+}
+
+HTTP_TARGET parse_target(char* target_str){
+	if (!target_str) return (HTTP_TARGET){};
+	char* filename = target_str;
+
+	if (strncmp(target_str, "/\0", 2) == 0) {
+		strcpy(filename, "/index.html");
+	}
+
+	return (HTTP_TARGET){
+		.filename = target_str+1,
+		.mime_type = parse_mime_type(target_str),
+	};
+}
+
+HTTP_VERSION parse_version(char* version_str){
+	if (!version_str) return HTTP_VER_ERR;
+
+	if (streq(version_str, "1.1")) 	return HTTP_VER_1_1; 
+	return HTTP_VER_ERR;
 }
