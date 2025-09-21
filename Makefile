@@ -1,7 +1,7 @@
 # -------- build rules (used on the SERVER) --------
 PROG	:= httpserver
 CC	:= gcc
-CFLAGS	:= -Wall -Iinclude -O2
+CFLAGS	:= -Wall -Iinclude -O2 -g3
 LDFLAGS :=
 SRC 	:= $(wildcard src/*.c)
 OBJS	:= $(SRC:.c=.o)
@@ -39,7 +39,7 @@ run-local: $(PROG)
 	@printf "\n"
 
 debug: $(PROG)
-	lldb -o run -- $(PROG) $(A)
+	lldb -o run -- $(PROG) -l $(A)
 
 clean:
 	@$(FMT_REV)
