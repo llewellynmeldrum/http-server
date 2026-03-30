@@ -1,13 +1,25 @@
 {{- with site.Params.homeInfoParams }}
 <article class="first-entry home-info">
-    <header class="entry-header">
-        <h1>{{ .Title | markdownify }}</h1>
-    </header>
-    <div class="entry-content">
-        {{ .Content | markdownify }}
-    </div>
-    <footer class="entry-footer">
-        {{ partial "social_icons.html" (dict "align" site.Params.homeInfoParams.AlignSocialIconsTo) }}
-    </footer>
+	<div class="entry-content">
+		<div class="about-me">
+			{{ .aboutMe | markdownify }}
+		</div>
+		<div class="site-aim">
+			{{ .siteAim| markdownify }}
+		</div>
+		<div class="the-backend">
+			{{ .theBackend | markdownify }}
+		</div>
+		<div class="projects-prelude">
+			{{ .projectsPrelude | markdownify }}
+		</div>
+		<div class="contacts-footer">
+			{{ .contactsFooter | markdownify}}
+			{{ partial "social_icons.html" (dict "align" site.Params.homeInfoParams.AlignSocialIconsTo) }}
+		</div>
+	</div>
+	<footer class="entry-footer">
+	</footer>
+	</div>
 </article>
 {{- end -}}

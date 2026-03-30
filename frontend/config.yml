@@ -4,6 +4,7 @@ baseURL: "https://adityatelange.github.io/hugo-PaperMod/"
 title: lmeldrum.dev 
 copyright: "© 2025, Llewellyn Meldrum"
 theme: [hugo-PaperMod]
+publishDir: ../www/
 
 enableInlineShortcodes: true
 enableRobotsTXT: true
@@ -12,7 +13,7 @@ buildFuture: false
 buildExpired: false
 enableEmoji: true
 pygmentsUseClasses: true
-mainsections: ["posts", "papermod"]
+mainsections: ["posts"]
 
 minify:
   disableXML: true
@@ -35,11 +36,8 @@ languages:
         - name: Home 
           url: /
           weight: 5
-        - name: Blog 
+        - name: Archive
           url: archives/
-          weight: 10
-        - name: Projects (TODO) 
-          url: projects/
           weight: 10
 
         #- name: Archive
@@ -83,27 +81,41 @@ params:
   images: ["images/papermod-cover.png"]
 
   homeInfoParams:
-    Title: "✋ Hi! I'm Llewie."
-    Content: >
-      I'm a 2nd year Software Engineering student at [MQU](https://en.wikipedia.org/wiki/Macquarie_University).
-      <br> 
-      I really enjoy anything low level, and am passionate about [C (programming language)](https://en.wikipedia.org/wiki/C_(programming_language)).
+    aboutMe: >
+      # ABOUT ME:
+      
+      - I'm a 2nd year Software Engineering student at [MQU](https://en.wikipedia.org/wiki/Macquarie_University).
+
+      - I'm interested in **low level/systems programming**.
+
+      - I'm a diehard user of [C (programming language)](https://en.wikipedia.org/wiki/C_(programming_language)).
+      
       <br>
-      This site aims to:
+    siteAim: >
+      # SITE PURPOSE: 
         - document a few of my favourite projects i've worked on
-        - share some of my thoughts/notes on smaller topics in the form of blog posts.
+        - act as the frontend for my C HTTP server. 
 
-      ### Fun fact:
+      <br>
+    theBackend: >
+      # SITE BACKEND: 
      
-      The backend of this site is a **completely custom HTTP server** written in C using sockets! Its remarkably simple.
+      The backend of this site is a HTTP server I wrote in C with `sockets.h`! Its actually pretty simple.
 
-        - The repo is avaliable [here.](https://github.com/llewellynmeldrum/http-server),
+        - Check out the details [here](posts/c_http_server),
 
-        - and its associated blog post is avaliable [here](posts/c_http_server).
+        - or the repo [here.](https://github.com/llewellynmeldrum/http-server)
 
+
+      <br>
+    projectsPrelude: >
+      # PROJECTS
+        etc...
+
+    contactsFooter: >
       # Contacts:
 
-      [github](https://github.com/llewellynmeldrum/http-server)  | [linkedin](https://www.linkedin.com/in/llewie-meldrum-978839258/) | [gmail](mailto:llewie.meldrum@gmail.com)
+      #### [github](https://github.com/llewellynmeldrum/http-server)  | [linkedin](https://www.linkedin.com/in/llewie-meldrum-978839258/) | [gmail](mailto:llewie.meldrum@gmail.com)
   socialIcons:
     - name: github
       title: View Source on Github

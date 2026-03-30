@@ -21,7 +21,7 @@
 	--content: rgb(31, 31, 31);
 	--code-block-bg: rgb(28, 29, 33);
 	--code-bg: rgb(245, 245, 245);
-	--border: rgb(238, 238, 238)
+	--border: rgb(238, 238, 238);
 }
 
 
@@ -31,7 +31,10 @@ body {
 	letter-spacing: 0px;
 }
 
-h1 {}
+b,
+strong {
+	color: #cbcbcb;
+}
 
 .header {
 	text-align: center;
@@ -160,6 +163,8 @@ a:hover {
 
 
 
+
+
 main {
 	box-shadow: 0 4px 8px 0 rgba(0, 0, 0, 0.2), 0 6px 20px 0 rgba(0, 0, 0, 0.19);
 	background: linear-gradient(to bottom,
@@ -168,12 +173,14 @@ main {
 }
 
 
+
 iframe {
 	border-radius: var(--radius) !important;
 }
 
 .first-entry .entry-content {
 	margin: 0px;
+	font-size: 18px;
 }
 
 .header ul {
@@ -182,13 +189,19 @@ iframe {
 
 .home-info ul {
 	/* indent size basically*/
-	padding-inline-start: 30px;
+	padding-inline-start: 40px;
 	margin-block: 10px
 }
 
-.social-icons a {
+.contacts-footer {
+	text-align: center;
 	padding-left: 16px;
 }
+
+.social-icons svg {
+	width: 100px;
+}
+
 
 .entry-cover img {
 	border: 1px solid var(--border);
