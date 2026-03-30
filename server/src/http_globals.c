@@ -2,7 +2,7 @@
 #include "http_response.h"
 #include <stdbool.h>
 
-const http_response_cfg HTTP_ERR_NOT_FOUND = (http_response_cfg){
+const HTTP_ResponseConfig HTTP_ResponseConfig_ERR_NOTFOUND = (HTTP_ResponseConfig){
     .version = HTTP_VERSION,
     .status = 404,
     .reason_phrase = "Not Found",
@@ -10,7 +10,7 @@ const http_response_cfg HTTP_ERR_NOT_FOUND = (http_response_cfg){
     .msg_body = "404: Not Found",
 };
 
-const http_response_cfg HTTP_ERR_BAD_REQUEST = (http_response_cfg){
+const HTTP_ResponseConfig HTTP_ResponseConfig_ERR_BADREQUEST = (HTTP_ResponseConfig){
     .version = HTTP_VERSION,
     .status = 400,
     .reason_phrase = "Bad Request",

@@ -3,7 +3,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/stat.h>
 #include <unistd.h>
 
 #include "http_consts.h"
@@ -12,61 +11,22 @@
 #include "myutils.h"
 #include "str_extras.h"
 
-void destroy_request(http_request req) { free(req.data); }
-#define MAX_FILE_SZ (size_t)(1e9) // 1Gb ~(125MB)
-#define MAX_RESPONSE_HEADER_SZ (size_t)1024
+#include "http_response_internal.h"
 
-static char *parse_mime_type(char *filename);
-static char *read_file(const char *filename, size_t file_size);
-static http_response serialize_http_response(http_response_cfg c);
-
-/* we use the windows style for completeness. */
-#define NEWL "\r\n"
-size_t syscall_file_size(const char *filename) {
-    struct stat s;
-    stat(filename, &s);
-    return s.st_size;
-}
-
-/*
-typedef struct http_request {
-        char *data;
-        size_t data_len;
-        HTTP_METHOD method;
-        HTTP_TARGET target;
-        http_version version;
-        HTTP_FIELD *fields;
-        size_t nfields;
-} http_request;
-*/
-
-#define MAX_VERSION_STRLEN 3
-#define MAX_METHOD_STRLEN 32
-#define MAX_TARGET_STRLEN 256
-
-#define MAX_REQUEST_LINE_SZ                                                    \
-    MAX_TARGET_STRLEN + MAX_VERSION_STRLEN + MAX_METHOD_STRLEN + 1
-
-#define MAX_HEADER_FIELD_SZ 128
-#define MAX_HEADER_VALUE_SZ 1024
-// *INDENT-OFF*
-
-static http_method parse_method(char *method_str);
-static http_target parse_target(char *target_str);
-static http_version parse_version(char *version_str);
-
-http_request parse_http_request(char *data, size_t data_len) {
-    http_request req = (http_request){.data = data, .data_len = data_len};
+HTTP_Request parse_http_request(char* data, size_t data_len) {
+    HTTP_Request req = (HTTP_Request){ .data = data, .data_len = data_len };
 
     char method_str[MAX_METHOD_STRLEN];
     char target_str[MAX_TARGET_STRLEN];
     char version_str[MAX_VERSION_STRLEN];
 
-    int n =
-        sscanf(data, "%s %s HTTP/%s" NEWL, method_str, target_str, version_str);
+    int n = sscanf(data, "%s %s HTTP/%s" NEWL, method_str, target_str, version_str);
     if (n != 3) {
         LOG_FATAL("Unable to parse request.\n");
         goto PARSE_HTTP_RQ_ERROR;
+    } else {
+        LOG_DEBUG("method='%s' target='%s', version='%s'" NEWL, method_str, target_str,
+                  version_str);
     }
 
     req.method = parse_method(method_str);
@@ -79,8 +39,7 @@ http_request parse_http_request(char *data, size_t data_len) {
     }
 
     if (!req.target.filename || !req.target.mime_type) {
-        LOG_FATAL("PARSING FAILURE: Filetype of '%s' not recognised.\n",
-                  target_str);
+        LOG_FATAL("File '%s' may not have been found Returning 404.\n", target_str);
         goto PARSE_HTTP_RQ_ERROR;
     }
 
@@ -92,26 +51,30 @@ http_request parse_http_request(char *data, size_t data_len) {
     return req;
 
 PARSE_HTTP_RQ_ERROR:
-    return (http_request){};
+    return (HTTP_Request){
+        .method = HTTP_METHOD_ERR,
+    };
 }
 
-http_response build_response_to_GET(http_request request) {
-    http_response_cfg GET_response_config;
-    bool file_exists = access(request.target.filename, F_OK) == 0;
-    size_t file_size = syscall_file_size(request.target.filename);
-    char *file_contents = read_file(request.target.filename, file_size);
+HTTP_Response build_response_to_GET(HTTP_Request request) {
+    HTTP_ResponseConfig GET_response_config;
+    bool                file_exists = access(request.target.filename, F_OK) == 0;
+    LOG_EXPR(file_exists);
+    off_t file_size = syscall_file_size(request.target.filename);
+    LOG_EXPR(file_size);
+    char* file_contents = read_file(request.target.filename, file_size);
 
     if (!file_exists || !file_contents) {
-        GET_response_config = HTTP_ERR_NOT_FOUND;
+        GET_response_config = HTTP_ResponseConfig_ERR_NOTFOUND;
         return serialize_http_response(GET_response_config);
     }
 
     if (!request.target.mime_type) {
-        GET_response_config = HTTP_ERR_BAD_REQUEST;
+        GET_response_config = HTTP_ResponseConfig_ERR_BADREQUEST;
         return serialize_http_response(GET_response_config);
     }
 
-    GET_response_config = (http_response_cfg){
+    GET_response_config = (HTTP_ResponseConfig){
         .version = REQUIRED_HTTP_VER_STR,
         .status = 200,
         .reason_phrase = "200: OK",
@@ -124,46 +87,38 @@ http_response build_response_to_GET(http_request request) {
     return serialize_http_response(GET_response_config);
 }
 
-http_response build_http_response(http_request request) {
-    LOG_INFO("building response for target --> '%s'\n",
-             request.target.filename);
-    switch (request.method) {
-    case HTTP_GET:
+HTTP_Response build_http_response(HTTP_Request request) {
+    LOG_INFO("building response for target --> '%s'\n", request.target.filename);
+    if (request.method == HTTP_GET) {
         return build_response_to_GET(request);
-        break;
-    case HTTP_METHOD_ERR:
-        break;
-    default:
-        break;
+    } else {
+        return serialize_http_response(HTTP_ResponseConfig_ERR_NOTFOUND);
     }
-    return (http_response){};
 }
 
 // *INDENT-OFF*
 // caller responsible for freeing buffer; unless ret null
-http_response serialize_http_response(http_response_cfg c) {
+HTTP_Response serialize_http_response(HTTP_ResponseConfig c) {
     const size_t MAX_RESPONSE_SZ = MAX_RESPONSE_HEADER_SZ + MAX_FILE_SZ;
 
-    char *response_buf = calloc((MAX_RESPONSE_SZ + 1), sizeof(char));
+    char* response_buf = calloc((MAX_RESPONSE_SZ + 1), sizeof(char));
     LOG_INFO("maxrespone=%zuB \n", MAX_RESPONSE_SZ);
     if (!response_buf) {
         LOG_FATAL("calloc failed.");
-        return (http_response){};
+        return (HTTP_Response){};
     }
 
     snprintf(response_buf, MAX_RESPONSE_HEADER_SZ,
-             "HTTP/%s %d %s" NEWL "Content-Type: %s" NEWL NEWL, c.version,
-             c.status, c.reason_phrase, c.mime_type);
+             "HTTP/%s %d %s" NEWL "Content-Type: %s" NEWL NEWL, c.version, c.status,
+             c.reason_phrase, c.mime_type);
 
     if (!response_buf) {
         LOG_FATAL("Unable to write header contents to response buffer!\n");
-        return (http_response){};
+        return (HTTP_Response){};
     }
-    if (strnlen(response_buf, MAX_RESPONSE_HEADER_SZ) >=
-        MAX_RESPONSE_HEADER_SZ) {
-        LOG_FATAL(
-            "Header contents are too long! May not have space for msg body.\n");
-        return (http_response){};
+    if (strnlen(response_buf, MAX_RESPONSE_HEADER_SZ) >= MAX_RESPONSE_HEADER_SZ) {
+        LOG_FATAL("Header contents are too long! May not have space for msg body.\n");
+        return (HTTP_Response){};
     }
 
     size_t len = strlen(response_buf);
@@ -175,22 +130,23 @@ http_response serialize_http_response(http_response_cfg c) {
 
     if (c.malloced_body)
         free(c.msg_body);
-    return (http_response){
+    return (HTTP_Response){
         .data = response_buf,
         .len = c.body_size + len,
     };
 }
 
-#define logretnull(fmt, ...)                                                   \
-    do {                                                                       \
-        LOG_FATAL(fmt, ##__VA_ARGS__) return NULL;                             \
+#define logretnull(fmt, ...)                                                                       \
+    do {                                                                                           \
+        LOG_FATAL(fmt, ##__VA_ARGS__) return NULL;                                                 \
     } while (0)
 
-char *read_file(const char *filename, size_t file_size) {
-    FILE *file_ptr = fopen(filename, "rb");
+char* read_file(const char* filename, size_t file_size) {
+    FILE* file_ptr = fopen(filename, "rb");
 
     if (!file_ptr) {
         LOG_FATAL("Unable to open file '%s'.\n", filename);
+        dprintbuf("fuckass:", filename, 100, 0);
         return NULL;
     }
 
@@ -201,12 +157,12 @@ char *read_file(const char *filename, size_t file_size) {
     }
 
     if (file_size > MAX_FILE_SZ) {
-        LOG_FATAL("Requested file '%s' is too large! (%zu>%zu)\n", filename,
-                  file_size, MAX_FILE_SZ);
+        LOG_FATAL("Requested file '%s' is too large! (%zu>%zu)\n", filename, file_size,
+                  MAX_FILE_SZ);
         fclose(file_ptr);
         return NULL;
     }
-    char *file_contents = malloc(sizeof(char) * file_size);
+    char* file_contents = malloc(sizeof(char) * file_size);
     if (!file_contents) {
         LOG_FATAL("Unable to alloc buffer for file '%s'.\n", filename);
         fclose(file_ptr);
@@ -224,8 +180,12 @@ char *read_file(const char *filename, size_t file_size) {
     return file_contents;
 }
 
-char *parse_file_extension(char *filename) {
-    char *first_dot = strchr(filename, '.');
+char* parse_file_extension(char* filename) {
+    if (!filename) {
+        LOG_FATAL("Recieved null filename.");
+        return NULL;
+    }
+    char* first_dot = strchr(filename, '.');
     if (strchr(first_dot + 1, '.')) {
         return NULL;
     } else {
@@ -233,8 +193,8 @@ char *parse_file_extension(char *filename) {
     }
 }
 
-char *parse_mime_type(char *filename) {
-    char *ext = parse_file_extension(filename);
+char* parse_mime_type(char* filename) {
+    char* ext = parse_file_extension(filename);
     if (!ext) {
         LOG_FATAL("GET Request for file (%s) has multiple '.' chars,"
                   "unable to determine MIME type!\n",
@@ -416,7 +376,7 @@ char *parse_mime_type(char *filename) {
     return NULL;
 }
 
-http_method parse_method(char *method_str) {
+HTTP_Method parse_method(char* method_str) {
     if (!method_str)
         return HTTP_METHOD_ERR;
 
@@ -428,43 +388,55 @@ http_method parse_method(char *method_str) {
         return HTTP_METHOD_ERR;
 }
 
-http_target parse_target(char *req_path_raw) {
+HTTP_Target parse_target(char* req_path_raw) {
     LOG_DEBUG("Request made for raw path: '%s'", req_path_raw);
-    // browser has made a request for a path.
-    if (!req_path_raw || req_path_raw[0] != '/') {
-        return (http_target){};
+    char* res_filename = calloc(PATH_MAX, sizeof(char));
+
+    if (!req_path_raw || streq(req_path_raw, "/")) {
+        size_t len = PATH_MAX;
+        char   index_html[] = "index.html";
+        snprintf(res_filename, len, "%s/%s", document_root, index_html);
+        LOG_DEBUG("Request special case, transforming to: '%s'", req_path_raw);
+        return (HTTP_Target){
+            .filename = res_filename,
+            .mime_type = parse_mime_type(res_filename),
+        };
     }
     // 1. Append the true document root to the beginning of the req
-    const char *req_path_no_lead_slash = req_path_raw + 1;
-    size_t len = strnlen(req_path_raw, PATH_MAX);
-    snprintf(req_path_raw, len, "%s/%s", document_root, req_path_no_lead_slash);
+    char appended_path_raw[PATH_MAX];
+    for (int i = 0; i < PATH_MAX; i++) {
+        appended_path_raw[i] = '\0';
+    }
+
+    const char* req_path_no_lead_slash = req_path_raw + 1;
+    LOG_DEBUG("req_path_raw=%s", req_path_raw);
+    size_t len = PATH_MAX;
+    snprintf(appended_path_raw, len, "%s/%s", document_root, req_path_no_lead_slash);
 
     // 2. resolve any symlinks, ../ or ./ in the path.
-    char req_path_resolved[PATH_MAX];
-    if (!realpath(req_path_raw, req_path_resolved)) {
-        LOG_INFO("%s could not be req_path_resolved to a target.\n",
-                 req_path_raw);
-        return (http_target){};
+    if (!realpath(appended_path_raw, res_filename)) {
+        LOG_INFO("%s could not be resolved to a target.\n", appended_path_raw);
+        LOG_ERRNO();
+        return NULL_TARGET;
     }
     // 3. ensure that after resolution, the request path still begins with the
     // document root (avoids the case of ../ escaping root dir)
-    if (!cstr_startsWith(req_path_resolved, document_root)) {
-        LOG_INFO("%s does not begin with %s!\n", req_path_resolved,
-                 document_root);
-        return (http_target){};
+    if (!cstr_startsWith(res_filename, document_root)) {
+        LOG_INFO("%s does not begin with %s!\n", res_filename, document_root);
+        return NULL_TARGET;
     }
-    if (streq(req_path_resolved, document_root)) {
-        strcpy(req_path_resolved, "/index.html");
+    if (streq(res_filename, document_root)) {
+        strcpy(res_filename, "/index.html");
     }
-    LOG_DEBUG("Request resolved to: '%s'", req_path_resolved);
+    LOG_DEBUG("Request resolved to: '%s'", res_filename);
 
-    return (http_target){
-        .filename = req_path_resolved,
-        .mime_type = parse_mime_type(req_path_resolved),
+    return (HTTP_Target){
+        .filename = res_filename,
+        .mime_type = parse_mime_type(res_filename),
     };
 }
 
-http_version parse_version(char *version_str) {
+HTTP_Version parse_version(char* version_str) {
     if (!version_str)
         return HTTP_VER_ERR;
 

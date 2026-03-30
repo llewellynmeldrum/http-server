@@ -8,24 +8,25 @@
 #include <string.h>
 
 #include "ansi_helper.h"
+#include "errno_helper.h"
 #include "myutils.h"
 #include "native_timer.h"
 
-void dprintbuf(const char *title, const char *buf, ssize_t sz,
-               ssize_t linec_to_print);
-#define pretty_print_buffer(title, buf, lncount)                               \
-    dprintbuf(title, buf, strlen(buf), lncount);
+void dprintbuf(const char* title, const char* buf, size_t sz, size_t linec_to_print);
+#define pretty_print_buffer(title, buf, lncount) dprintbuf(title, buf, strlen(buf), lncount);
 #define OSTREAM stdout
 
-static inline void log_trace(const char *fmt, ...) {
+static inline void log_trace(const char* fmt, ...) {
     va_list ap;
     va_start(ap, fmt);
     vfprintf(OSTREAM, fmt, ap);
     va_end(ap);
 }
+static inline void LOG_ERRNO(void) {
+    log_trace("\t%s(%d) = '%s'\n", errno_id_str[errno], errno, errno_meaning_str[errno]);
+}
 
-static inline void log_return_internal(const char *func_str,
-                                       const char *expr_str) {
+static inline void log_return_internal(const char* func_str, const char* expr_str) {
     double ms = ms_since_start();
     log_trace(FMT_CLEAR);
     log_trace("%06.3lfs ", ms / 1000.0);
@@ -39,7 +40,7 @@ static inline void log_return_internal(const char *func_str,
     log_trace("returned -> %s", expr_str);
     log_trace("\n");
     if (!streq(expr_str, "void.")) {
-        free((void *)expr_str);
+        free((void*)expr_str);
     }
 }
 
@@ -47,10 +48,10 @@ static inline void log_return_internal(const char *func_str,
 #define RETURN_ARGC01(expr) return expr
 
 #ifdef DEBUG_RETURNS
-#define RETURN(...)                                                            \
-    MACRO_BEGIN                                                                \
-    LOG_RETURN_ARGC0##__VA_OPT__(1)(__VA_ARGS__);                              \
-    RETURN_ARGC0##__VA_OPT__(1)(__VA_ARGS__);                                  \
+#define RETURN(...)                                                                                \
+    MACRO_BEGIN                                                                                    \
+    LOG_RETURN_ARGC0##__VA_OPT__(1)(__VA_ARGS__);                                                  \
+    RETURN_ARGC0##__VA_OPT__(1)(__VA_ARGS__);                                                      \
     MACRO_END
 
 #define LOG_RETURN_ARGC0() log_return_internal(__FUNCTION__, "void.")
@@ -61,16 +62,16 @@ static inline void log_return_internal(const char *func_str,
 #define RETURN(...) RETURN_ARGC0##__VA_OPT__(1)(__VA_ARGS__)
 #endif
 
-static const char *FMT_LOGLEVEL_COLORS[] = {
-    GREEN,  // EXIT_SUCCESS
-    RED,    // EXIT_FAILURE
-    CYAN,   // DEBUG
-    CYAN,   // RETURN
-    LIGREY, // INFO
-    YELLOW, // NOTICE
-    PINK,   // WARN
-    LIRED,  // ERROR
-    RED,    // FATAL
+static const char* FMT_LOGLEVEL_COLORS[] = {
+    GREEN,   // EXIT_SUCCESS
+    RED,     // EXIT_FAILURE
+    CYAN,    // DEBUG
+    CYAN,    // RETURN
+    LIGREY,  // INFO
+    YELLOW,  // NOTICE
+    PINK,    // WARN
+    LIRED,   // ERROR
+    RED,     // FATAL
 };
 // clang-format off
 static const char* loglevel_tostr[] = { 
@@ -140,18 +141,19 @@ static LogSettings log_settings;
 
 // clang-format on
 
-#define X_LIST_TYPENAMES                                                       \
-    X(int, "%d", val)                                                          \
-    X(uint64_t, "%llu", val)                                                   \
-    X(double, "%lf", val)                                                      \
+#define X_LIST_TYPENAMES                                                                           \
+    X(int, "%d", val)                                                                              \
+    X(uint64_t, "%lu", val)                                                                        \
+    X(long, "%ld", val)                                                                            \
+    X(double, "%lf", val)                                                                          \
     X(bool, "%s", (val ? "true" : "false"))
 
-#define X(T, fmt, ...)                                                         \
-    static inline const char *T##_toStr(T val) {                               \
-        char *buf = calloc(128, sizeof(char));                                 \
-        snprintf(buf, 128, "%s ", #T);                                         \
-        snprintf(buf, 128, fmt, ##__VA_ARGS__);                                \
-        return buf;                                                            \
+#define X(T, fmt, ...)                                                                             \
+    static inline const char* T##_toStr(T val) {                                                   \
+        char* buf = calloc(128, sizeof(char));                                                     \
+        snprintf(buf, 128, "%s ", #T);                                                             \
+        snprintf(buf, 128, fmt, ##__VA_ARGS__);                                                    \
+        return buf;                                                                                \
     }
 
 X_LIST_TYPENAMES
@@ -162,15 +164,15 @@ X_LIST_TYPENAMES
     _Generic(x, \
         int: int_toStr, \
         uint64_t: uint64_t_toStr, \
+        long: long_toStr, \
         double: double_toStr, \
         bool: bool_toStr, \
         default: int_toStr)(x)
 // clang-format on
 
-#define LOG_EXPR(x)                                                            \
-    do {                                                                       \
-        const char *str = TOSTR(x);                                            \
-        log_internal(LogLevel_INFO, gtx.tick, __FILE_NAME__, __LINE__,         \
-                     "%s = %s", #x, str);                                      \
-        free((void *)str);                                                     \
+#define LOG_EXPR(x)                                                                                \
+    do {                                                                                           \
+        const char* str = TOSTR(x);                                                                \
+        log_internal(LogLevel_INFO, __FILE_NAME__, __LINE__, "%s = %s", #x, str);                  \
+        free((void*)str);                                                                          \
     } while (0)

@@ -1,4 +1,5 @@
 #pragma once
+#include "errno.h"
 static const char *errno_meaning_str[] = {
     "NONE",
     "Operation not permitted",
