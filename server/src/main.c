@@ -118,7 +118,9 @@ CLIENT_CLEANUP:
     close(client);
     free(request_data);
     LOG_INFO(FSTR_AVALIABLE_AT, config.port, config.hostname, config.port);
+    pthread_mutex_lock(&stats_mutex);
     LOG_INFO(FSTR_STATS(stats));
+    pthread_mutex_unlock(&stats_mutex);
 
     return NULL;
 }
