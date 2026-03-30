@@ -4,7 +4,7 @@ all:
 	./setup-env.sh 
 
 asan: 
-	./setup-env.sh -asan
+	./setup-env.sh 
 
 run-from-script: run
 
@@ -12,6 +12,7 @@ run-from-script: run
 SRC_DIR	:=src
 OBJ_DIR :=build
 
+CFLAGS+= -g -fsanitize=thread -fno-omit-frame-pointer
 SRC_EXT	:=.c
 OBJ_EXT :=.o
 
@@ -20,7 +21,6 @@ SRC 	:=$(wildcard $(SRC_DIR)/*$(SRC_EXT))
 OBJS 	:=$(patsubst $(SRC_DIR)/%$(SRC_EXT),$(OBJ_DIR)/%$(OBJ_EXT),$(SRC))
 DEPS	:=$(patsubst $(OBJ_DIR)/%$(OBJ_EXT),$(OBJ_DIR)/%.d, $(OBJS))
 
-LDLIBS	:=$(shell pkg-config sdl3 --libs)
 
 $(OBJ_DIR)/%$(OBJ_EXT) : $(SRC_DIR)/%$(SRC_EXT) 
 ifeq (${QUIET}, 0)
@@ -55,11 +55,10 @@ endif
 run: $(EXE)
 	@tput bold
 	@printf "Build finished in "
-	@./scripts/readtimer
 	@printf " w/ $(NCPU) cpus...\n"
 	@tput sgr0 
 	@$(ECHO_EXE_BANNER)
-	./$(EXE) $(ARGS)
+	sudo ./$(EXE) $(ARGS)
 
 	
 #NOTE: AVOID PUTTING TARGETS IN CLEAN COMMAND! BE VERY SPECIFIC SO YOU DONT NUKE YOUR SOURCE FILES ON ACCIDENT
@@ -69,7 +68,7 @@ clean:
 
 # ------------ DEBUGGING ------------ #
 debug: $(EXE)
-	lldb -o run -- $(EXE) $(TERM_COLS) $(ARGS)
+	$(DEBUGGER) -o run -- $(EXE) $(TERM_COLS) $(ARGS)
 
 	
 # Address san: lower overhead than thread-san, cleaner stack traces,

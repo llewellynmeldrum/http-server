@@ -15,11 +15,11 @@ static pthread_t client_handler_thread;
 static pthread_mutex_t stats_mutex;
 
 struct ServerStats {
-  ssize_t requests_received;
-  ssize_t bytes_received;
+  size_t requests_received;
+  size_t bytes_received;
 
-  ssize_t results_sent;
-  ssize_t bytes_sent;
+  size_t results_sent;
+  size_t bytes_sent;
 };
 typedef struct ServerStats ServerStats;
 
