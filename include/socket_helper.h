@@ -8,6 +8,7 @@
 typedef int SOCK_STATUS;
 
 static const SOCK_STATUS SOCK_ERR = -1;
+static const SOCK_STATUS SOCK_SUCCESS = 0;
 
 /* THREADING STUFF */
 static pthread_t client_handler_thread;

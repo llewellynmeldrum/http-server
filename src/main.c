@@ -29,8 +29,6 @@ static void init_threads();
 static void *handle_client(void *arg);
 
 int main(int argc, char **argv) {
-  //  signal(SIGINT, handle_SIGINT);
-
   init_config(argc, argv);
   init_socket();
   init_threads();
@@ -163,7 +161,7 @@ void handle_socket_bind_err(SOCK_STATUS bind_status) {
     }
   } else {
     int time_to_sleep = 5;
-    log("Port %hu failed to bind. \n", config.sock_addr.sin_port);
+    log("Port %hu failed to bind. \n", ntohs(config.sock_addr.sin_port));
     while (bind_status == SOCK_ERR) {
       log("Trying again in %ds... \n", time_to_sleep);
       logerrno();

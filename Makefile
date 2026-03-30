@@ -35,7 +35,7 @@ run: $(PROG)
 	@$(FMT_REDBANNER)
 	@echo " EXECUTING BINARY (LOCALHOST BUILD): "
 	@$(FMT_RESET)
-	./$(PROG) $(A)
+	@sudo ./$(PROG) $(A)
 	@printf "\n"
 
 debug: $(PROG)
