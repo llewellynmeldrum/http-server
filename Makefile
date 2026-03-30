@@ -35,7 +35,7 @@ run: $(PROG)
 	@$(FMT_REDBANNER)
 	@echo " EXECUTING BINARY (LOCALHOST BUILD): "
 	@$(FMT_RESET)
-	./$(PROG) -l $(A)
+	./$(PROG) $(A)
 	@printf "\n"
 
 debug: $(PROG)
@@ -47,48 +47,3 @@ clean:
 	@$(FMT_RESET)
 	rm -f $(PROG) $(OBJS)
 
-# REMOTE STUFF
-REMOTE_DIR := /home/ubuntu/http-server
-TMUX_SESSION    := http-server-tmux 
-REMOTE_BIN := ./httpserver 
-
-# SSH 
-HOST       := ubuntu@3.105.0.153
-SSH_KEY    := /Users/llewie/lmeldrum_dev.pem
-SSH := ssh -i $(SSH_KEY) $(HOST)
-
-RSYNC_CONF  := rsync -az -e "ssh -i $(SSH_KEY) -o IdentitiesOnly=yes" \
-        --delete --exclude '.git' --exclude 'build/' --exclude '*.o'
-.PHONY: deploy sync run-remote stop logs shell
-
-# One-liner you’ll use most: copy → build on server → (re)start in tmux
-deploy: sync run-remote
-
-# Copy your working tree to the server (fast: only deltas)
-sync:
-	$(RSYNC_CONF) ./ $(HOST):$(REMOTE_DIR)/
-
-# Build and (re)start ON THE SERVER (never builds locally)
-run-remote:
-	$(SSH) "set -e; cd $(REMOTE_DIR); \
-		make -j build; \
-		tmux kill-session -t $(TMUX_SESSION) 2>/dev/null || true; \
-		tmux new -d -s $(TMUX_SESSION) 'cd $(REMOTE_DIR) && sudo $(REMOTE_BIN) $(A) 2>server.err.log'; \
-		echo 'running in tmux: $(TMUX_SESSION). stderr -> server.err.log'"
-	$(SSH) "tail -f $(REMOTE_DIR)/server.err.log"
-
-# Stop the server cleanly
-stop:
-	$(SSH) "tmux kill-session -t $(TMUX_SESSION) 2>/dev/null || pkill -f '$(REMOTE_BIN)' || true; echo ' stopped'"
-
-# Quick peek at output (for live tail: `make shell` then `tmux attach -t app`)
-logs:
-	$(SSH) "tail -f $(REMOTE_DIR)/server.err.log"
-
-# Jump into the box
-shell:
-	$(SSH)
-
-
-# Perhaps change te commands to scripts?
-# Would like to see stderr directly.

@@ -1,48 +1,190 @@
 #ifndef LOG_H
 #define LOG_H
+
+static const char *errno_id_str[] = {""};
+#define EPERM 1            /* Operation not permitted */
+#define ENOENT 2           /* No such file or directory */
+#define ESRCH 3            /* No such process */
+#define EINTR 4            /* Interrupted system call */
+#define EIO 5              /* I/O error */
+#define ENXIO 6            /* No such device or address */
+#define E2BIG 7            /* Argument list too long */
+#define ENOEXEC 8          /* Exec format error */
+#define EBADF 9            /* Bad file number */
+#define ECHILD 10          /* No child processes */
+#define EAGAIN 11          /* Try again */
+#define ENOMEM 12          /* Out of memory */
+#define EACCES 13          /* Permission denied */
+#define EFAULT 14          /* Bad address */
+#define ENOTBLK 15         /* Block device required */
+#define EBUSY 16           /* Device or resource busy */
+#define EEXIST 17          /* File exists */
+#define EXDEV 18           /* Cross-device link */
+#define ENODEV 19          /* No such device */
+#define ENOTDIR 20         /* Not a directory */
+#define EISDIR 21          /* Is a directory */
+#define EINVAL 22          /* Invalid argument */
+#define ENFILE 23          /* File table overflow */
+#define EMFILE 24          /* Too many open files */
+#define ENOTTY 25          /* Not a typewriter */
+#define ETXTBSY 26         /* Text file busy */
+#define EFBIG 27           /* File too large */
+#define ENOSPC 28          /* No space left on device */
+#define ESPIPE 29          /* Illegal seek */
+#define EROFS 30           /* Read-only file system */
+#define EMLINK 31          /* Too many links */
+#define EPIPE 32           /* Broken pipe */
+#define EDOM 33            /* Math argument out of domain of func */
+#define ERANGE 34          /* Math result not representable */
+#define EDEADLK 35         /* Resource deadlock would occur */
+#define ENAMETOOLONG 36    /* File name too long */
+#define ENOLCK 37          /* No record locks available */
+#define ENOSYS 38          /* Invalid system call number */
+#define ENOTEMPTY 39       /* Directory not empty */
+#define ELOOP 40           /* Too many symbolic links encountered */
+#define EWOULDBLOCK EAGAIN /* Operation would block */
+#define ENOMSG 42          /* No message of desired type */
+#define EIDRM 43           /* Identifier removed */
+#define ECHRNG 44          /* Channel number out of range */
+#define EL2NSYNC 45        /* Level 2 not synchronized */
+#define EL3HLT 46          /* Level 3 halted */
+#define EL3RST 47          /* Level 3 reset */
+#define ELNRNG 48          /* Link number out of range */
+#define EUNATCH 49         /* Protocol driver not attached */
+#define ENOCSI 50          /* No CSI structure available */
+#define EL2HLT 51          /* Level 2 halted */
+#define EBADE 52           /* Invalid exchange */
+#define EBADR 53           /* Invalid request descriptor */
+#define EXFULL 54          /* Exchange full */
+#define ENOANO 55          /* No anode */
+#define EBADRQC 56         /* Invalid request code */
+#define EBADSLT 57         /* Invalid slot */
+#define EDEADLOCK EDEADLK
+#define EBFONT 59          /* Bad font file format */
+#define ENOSTR 60          /* Device not a stream */
+#define ENODATA 61         /* No data available */
+#define ETIME 62           /* Timer expired */
+#define ENOSR 63           /* Out of streams resources */
+#define ENONET 64          /* Machine is not on the network */
+#define ENOPKG 65          /* Package not installed */
+#define EREMOTE 66         /* Object is remote */
+#define ENOLINK 67         /* Link has been severed */
+#define EADV 68            /* Advertise error */
+#define ESRMNT 69          /* Srmount error */
+#define ECOMM 70           /* Communication error on send */
+#define EPROTO 71          /* Protocol error */
+#define EMULTIHOP 72       /* Multihop attempted */
+#define EDOTDOT 73         /* RFS specific error */
+#define EBADMSG 74         /* Not a data message */
+#define EOVERFLOW 75       /* Value too large for defined data type */
+#define ENOTUNIQ 76        /* Name not unique on network */
+#define EBADFD 77          /* File descriptor in bad state */
+#define EREMCHG 78         /* Remote address changed */
+#define ELIBACC 79         /* Can not access a needed shared library */
+#define ELIBBAD 80         /* Accessing a corrupted shared library */
+#define ELIBSCN 81         /* .lib section in a.out corrupted */
+#define ELIBMAX 82         /* Attempting to link in too many shared libraries */
+#define ELIBEXEC 83        /* Cannot exec a shared library directly */
+#define EILSEQ 84          /* Illegal byte sequence */
+#define ERESTART 85        /* Interrupted system call should be restarted */
+#define ESTRPIPE 86        /* Streams pipe error */
+#define EUSERS 87          /* Too many users */
+#define ENOTSOCK 88        /* Socket operation on non-socket */
+#define EDESTADDRREQ 89    /* Destination address required */
+#define EMSGSIZE 90        /* Message too long */
+#define EPROTOTYPE 91      /* Protocol wrong type for socket */
+#define ENOPROTOOPT 92     /* Protocol not available */
+#define EPROTONOSUPPORT 93 /* Protocol not supported */
+#define ESOCKTNOSUPPORT 94 /* Socket type not supported */
+#define EOPNOTSUPP 95      /* Operation not supported on transport endpoint */
+#define EPFNOSUPPORT 96    /* Protocol family not supported */
+#define EAFNOSUPPORT 97    /* Address family not supported by protocol */
+#define EADDRINUSE 98      /* Address already in use */
+#define EADDRNOTAVAIL 99   /* Cannot assign requested address */
+#define ENETDOWN 100       /* Network is down */
+#define ENETUNREACH 101    /* Network is unreachable */
+#define ENETRESET 102      /* Network dropped connection because of reset */
+#define ECONNABORTED 103   /* Software caused connection abort */
+#define ECONNRESET 104     /* Connection reset by peer */
+#define ENOBUFS 105        /* No buffer space available */
+#define EISCONN 106        /* Transport endpoint is already connected */
+#define ENOTCONN 107       /* Transport endpoint is not connected */
+#define ESHUTDOWN 108      /* Cannot send after transport endpoint shutdown */
+#define ETOOMANYREFS 109   /* Too many references: cannot splice */
+#define ETIMEDOUT 110      /* Connection timed out */
+#define ECONNREFUSED 111   /* Connection refused */
+#define EHOSTDOWN 112      /* Host is down */
+#define EHOSTUNREACH 113   /* No route to host */
+#define EALREADY 114       /* Operation already in progress */
+#define EINPROGRESS 115    /* Operation now in progress */
+#define ESTALE 116         /* Stale file handle */
+#define EUCLEAN 117        /* Structure needs cleaning */
+#define ENOTNAM 118        /* Not a XENIX named type file */
+#define ENAVAIL 119        /* No XENIX semaphores available */
+#define EISNAM 120         /* Is a named type file */
+#define EREMOTEIO 121      /* Remote I/O error */
+#define EDQUOT 122         /* Quota exceeded */
+#define ENOMEDIUM 123      /* No medium found */
+#define EMEDIUMTYPE 124    /* Wrong medium type */
+#define ECANCELED 125      /* Operation Canceled */
+#define ENOKEY 126         /* Required key not available */
+#define EKEYEXPIRED 127    /* Key has expired */
+#define EKEYREVOKED 128    /* Key has been revoked */
+#define EKEYREJECTED 129   /* Key was rejected by service */
+#define EOWNERDEAD 130     /* Owner died */
+#define ENOTRECOVERABLE 131 /* State not recoverable */
+#define ERFKILL 132         /* Operation not possible due to RF-kill */
+#define EHWPOISON 133       /* Memory page has hardware error */
+
+#endif
+
 /* PROPOSED LOGGING LEVELS:
 
-	FATAL;
-	-> PREFIX: (bold, red) "[FATAL/UNRECOVERABLE ERROR] --> %s", body_text
-	-> BODY TEXT: (red) "..."
-		Something likely unrecoverable has happened to the program.
-		If termination isnt instant, it should happen pretty soon, else there will be a crash.
-		A function that reports a fatal error will almost certainly return a nullptr.
+        FATAL;
+        -> PREFIX: (bold, red) "[FATAL/UNRECOVERABLE ERROR] --> %s", body_text
+        -> BODY TEXT: (red) "..."
+                Something likely unrecoverable has happened to the program.
+                If termination isnt instant, it should happen pretty soon, else
+   there will be a crash. A function that reports a fatal error will almost
+   certainly return a nullptr.
         <------------------------------------------------------------------------------------------>
 
-	CRIT_WARNING;
-	-> PREFIX: (bold, underlined(?), yellow) "[CRITICAL WARNING] --> %s", body_text
-	-> BODY TEXT: (yellow) "..."
-		A critical warning; i.e something which should stand out when reading logs,
-		but is not necessarily more pertinent/threatening than a warning.
+        CRIT_WARNING;
+        -> PREFIX: (bold, underlined(?), yellow) "[CRITICAL WARNING] --> %s",
+   body_text
+        -> BODY TEXT: (yellow) "..."
+                A critical warning; i.e something which should stand out when
+   reading logs, but is not necessarily more pertinent/threatening than a
+   warning.
         <------------------------------------------------------------------------------------------>
 
-	WARNING;
-	-> PREFIX: (yellow) "[WARNING] --> %s", body_text
-	-> BODY TEXT: (yellow) "..."
-		Something probably bad has happened, but we arent going to return null or do anything crazy.
-		Just keep it in mind.
+        WARNING;
+        -> PREFIX: (yellow) "[WARNING] --> %s", body_text
+        -> BODY TEXT: (yellow) "..."
+                Something probably bad has happened, but we arent going to
+   return null or do anything crazy. Just keep it in mind.
         <------------------------------------------------------------------------------------------>
 
-	STANDARD;
-	-> PREFIX: (n/a)
-	-> BODY TEXT: (n/a) "..."
-		The default logging level, shows up no matter what.
+        STANDARD;
+        -> PREFIX: (n/a)
+        -> BODY TEXT: (n/a) "..."
+                The default logging level, shows up no matter what.
         <------------------------------------------------------------------------------------------>
 
-	DEBUG;
-	-> PREFIX: (n/a)
-	-> BODY TEXT: (blue!) "..."
-		For information superfluous outside of specific debugging contexts, like when
-		creating a new feature.
+        DEBUG;
+        -> PREFIX: (n/a)
+        -> BODY TEXT: (blue!) "..."
+                For information superfluous outside of specific debugging
+   contexts, like when creating a new feature.
         <------------------------------------------------------------------------------------------>
 
 */
+#include <asm-generic/errno.h>
+#include <errno.h>
+#include <stdarg.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <errno.h>
-#include <stdarg.h>
 
 extern bool show_pretty_print_guide;
 extern char copybuf[];
@@ -50,25 +192,29 @@ extern char copybuf[];
 ssize_t GET_TERM_COLS();
 void LOG_UPPER_SEPARATOR();
 void LOG_LOWER_SEPARATOR();
-void dprintbuf(const char* title, const char* buf, ssize_t sz, ssize_t linec_to_print);
-#define pretty_print_buffer(title, buf, lncount) dprintbuf(title, buf, strlen(buf), lncount);
-
+void dprintbuf(const char *title, const char *buf, ssize_t sz,
+               ssize_t linec_to_print);
+#define pretty_print_buffer(title, buf, lncount)                               \
+  dprintbuf(title, buf, strlen(buf), lncount);
 
 #define log(fmt, ...) fprintf(stderr, fmt, ##__VA_ARGS__)
 
-#define logexit(n)do {				\
-	if(n == EXIT_SUCCESS){ log(SET_GREEN);}	\
-	else {log(SET_RED);}			\
-	log("\nExiting...%s\n\n",SET_CLEAR);	\
-	exit(n);				\
-	} while(0)
+#define logexit(n)                                                             \
+  do {                                                                         \
+    if (n == EXIT_SUCCESS) {                                                   \
+      log(SET_GREEN);                                                          \
+    } else {                                                                   \
+      log(SET_RED);                                                            \
+    }                                                                          \
+    log("\nExiting...%s\n\n", SET_CLEAR);                                      \
+    exit(n);                                                                   \
+  } while (0)
 
-
-#define logerrno() do{			\
-	log("ERRNO(%d):",errno);	\
-	perror("");			\
-	}while(0)
-
+inline static void logerrno() {
+  log("ERRNO(%d):", errno);
+  perror("");
+  EDEADLK
+}
 
 /* functions can define FN_NAME to idenify themselves in logging:
  * 	- any FATAL messages,
@@ -76,50 +222,54 @@ void dprintbuf(const char* title, const char* buf, ssize_t sz, ssize_t linec_to_
  *   	- any CRIT_WARNING messages (planned)
  * */
 
-#define ALLOC_FAILURE(resource) "Failed to allocate memory for '%s'!\n", #resource
+#define ALLOC_FAILURE(resource)                                                \
+  "Failed to allocate memory for '%s'!\n", #resource
 #ifdef FN_NAME
 
-#define logfatal(fmt, ...) do{							\
-	log("\n\033[31;1m[FATAL ERROR IN " FN_NAME "] ->\033[0m \033[31m");	\
-	log(fmt, ##__VA_ARGS__);						\
-	log("\033[0m");								\
-	}while(0)
+#define logfatal(fmt, ...)                                                     \
+  do {                                                                         \
+    log("\n\033[31;1m[FATAL ERROR IN " FN_NAME "] ->\033[0m \033[31m");        \
+    log(fmt, ##__VA_ARGS__);                                                   \
+    log("\033[0m");                                                            \
+  } while (0)
 
 #else
-#define logfatal(fmt, ...) do{					\
-	log("\n\033[31;1m[FATAL ERROR] ->\033[0m \033[31m");	\
-	log(fmt, ##__VA_ARGS__);				\
-	log("\033[0m");						\
-	}while(0)
+#define logfatal(fmt, ...)                                                     \
+  do {                                                                         \
+    log("\n\033[31;1m[FATAL ERROR] ->\033[0m \033[31m");                       \
+    log(fmt, ##__VA_ARGS__);                                                   \
+    log("\033[0m");                                                            \
+  } while (0)
 
 #endif
 
-#define logfatalerrno(fmt, ...) do{	\
-	logfatal(fmt, ##__VA_ARGS__);	\
-	logerrno();			\
-	log("\033[0m");			\
-	}while(0)			\
+#define logfatalerrno(fmt, ...)                                                \
+  do {                                                                         \
+    logfatal(fmt, ##__VA_ARGS__);                                              \
+    logerrno();                                                                \
+    log("\033[0m");                                                            \
+  } while (0)
 
-#define logfatal_exit(fmt, ...) do{	\
-	logfatal(fmt, ##__VA_ARGS__);	\
-	logexit(1);			\
-	}while(0)
+#define logfatal_exit(fmt, ...)                                                \
+  do {                                                                         \
+    logfatal(fmt, ##__VA_ARGS__);                                              \
+    logexit(1);                                                                \
+  } while (0)
 
-#define logfatalerrno_exit(fmt, ...) do{	\
-	logfatalerrno(fmt, ##__VA_ARGS__);	\
-	logexit(1);				\
-     	exit(1);				\
-	}while(0)
+#define logfatalerrno_exit(fmt, ...)                                           \
+  do {                                                                         \
+    logfatalerrno(fmt, ##__VA_ARGS__);                                         \
+    logexit(1);                                                                \
+    exit(1);                                                                   \
+  } while (0)
 
-#define logwarning(fmt, ...)do {		\
-	log(SET_ORANGE);			\
-	log("\n[WARNING!]%s\n",SET_CLEAR);	\
-	log(SET_BOLD);				\
-	log(fmt, ##__VA_ARGS__);		\
-	} while(0)
-
-
-
+#define logwarning(fmt, ...)                                                   \
+  do {                                                                         \
+    log(SET_ORANGE);                                                           \
+    log("\n[WARNING!]%s\n", SET_CLEAR);                                        \
+    log(SET_BOLD);                                                             \
+    log(fmt, ##__VA_ARGS__);                                                   \
+  } while (0)
 
 #define SET_CLEAR "\033[0m"
 
@@ -129,18 +279,18 @@ void dprintbuf(const char* title, const char* buf, ssize_t sz, ssize_t linec_to_
 #define SET_PURPLE "\033[0;35m"
 #define SET_ORANGE "\033[48:2:255:165:1m"
 
-
 #define SET_REV "\033[7m"
 
 #define SET_BOLD "\033[1m"
 #define SET_UNDERLINE "\033[4m"
 #define SET_UNDERBOLD "\033[1;4m"
 
-
 #define SET_NOREV "\033[27m"
 #define SET_NOUNDERLINE "\033[24m"
 #define SET_NOBOLD "\033[21m"
 
-#define SET(s) "\033["s"m"
+#define SET(s)                                                                 \
+  "\033["s                                                                     \
+  "m"
 
 #endif // LOG_H

@@ -16,7 +16,6 @@
 #include "server_types.h"
 #include "socket_helper.h"
 
-static const char *EC2_INSTANCE_IPV4 = "3.105.0.153";
 static const unsigned int HTTP_TCP_PORT = 80;
 
 static ServerStats stats = (ServerStats){};
@@ -30,7 +29,7 @@ static void init_threads();
 static void *handle_client(void *arg);
 
 int main(int argc, char **argv) {
-  signal(SIGINT, handle_SIGINT);
+  //  signal(SIGINT, handle_SIGINT);
 
   init_config(argc, argv);
   init_socket();
@@ -43,7 +42,7 @@ int main(int argc, char **argv) {
     FILE_DESCRIPTOR *client = malloc(
         sizeof(FILE_DESCRIPTOR)); // 2. listen for client connections - accept
                                   // blocks the thread until it finds one
-    log(FSTR_AVALIABLE_AT(config));
+    log(FSTR_AVALIABLE_AT, config.port, config.hostname, config.port);
     if (!client)
       logfatal_exit("Unable to allocate memory for client FD!\n");
     *client =
@@ -104,12 +103,13 @@ void *handle_client(void *arg) {
 CLIENT_CLEANUP:
   close(client);
   free(request_data);
-  log(FSTR_AVALIABLE_AT(config));
+  log(FSTR_AVALIABLE_AT, config.port, config.hostname, config.port);
   log(FSTR_STATS(stats));
 
   return NULL;
 }
 
+// sigint handler
 void handle_SIGINT(int sig) {
   log("<- handling SIGINT.\n");
   int opt = 1;
@@ -119,17 +119,16 @@ void handle_SIGINT(int sig) {
 
 void init_config(int argc, char **argv) {
   int num_args = argc - 1;
-  // set defaults
-  config.is_localhost = false, strcpy(config.ipv4_str, EC2_INSTANCE_IPV4);
-  config.port = HTTP_TCP_PORT, config.sock_addr = (sockaddr_in){
-                                   .sin_family = AF_INET,
-                                   .sin_addr.s_addr = INADDR_ANY,
-                                   .sin_port = htons(HTTP_TCP_PORT),
-                               };
+  config.is_localhost = false;
+  strcpy(config.hostname, "lmeldrum.dev");
+  config.port = HTTP_TCP_PORT;
+  config.sock_addr = (sockaddr_in){
+      .sin_family = AF_INET,
+      .sin_addr.s_addr = INADDR_ANY,
+      .sin_port = htons(HTTP_TCP_PORT),
+  };
 
-  // check args
-  switch (num_args) {
-  case 1:
+  if (num_args == 1) {
     if (streq(argv[1], "-l") || streq(argv[1], "--local")) {
       config.is_localhost = true;
     } else if (streq(argv[1], "-h") || streq(argv[1], "-?") ||
@@ -137,13 +136,10 @@ void init_config(int argc, char **argv) {
       log(STR_USAGE);
       logexit(EXIT_SUCCESS);
     }
-    break;
-  case 0:
+  } else if (num_args == 0) {
     config.is_localhost = false;
-    break;
-  default:
+  } else {
     logfatal_exit("Unknown args passed, usage: \n %s %s\n", argv[0], STR_USAGE);
-    break;
   }
 
   // make alterations from default
@@ -151,14 +147,13 @@ void init_config(int argc, char **argv) {
     log(SET_BOLD
         "Localhost mode selected! localhost:random_port will be used." SET_CLEAR
         "\n\n");
-    strcpy(config.ipv4_str, "127.0.0.1");
+    strcpy(config.hostname, "127.0.0.1");
     config.port = 49152;
     config.sock_addr.sin_port = htons(config.port);
   }
 }
 
 void handle_socket_bind_err(SOCK_STATUS bind_status) {
-  log("looking\n");
   if (config.is_localhost) {
     while (bind_status == SOCK_ERR) {
       config.port = RAND_RANGE(49152, 65535);
