@@ -1,0 +1,49 @@
+{{- if lt hugo.Version "0.146.0" }}
+{{- errorf "=> hugo v0.146.0 or greater is required for hugo-PaperMod to build " }}
+{{- end -}}
+
+<!DOCTYPE html>
+<html lang="{{ site.Language }}" dir="{{ .Language.LanguageDirection | default " auto" }}">
+
+<head>
+	<script>
+		(function () {
+			const SITE_KEY = 'anim:site-once';
+			const nav = performance.getEntriesByType('navigation')[0];
+			const isReload = nav && nav.type === 'reload';
+
+			// Decide whether to play the animation this load:
+			// - If it's a reload, play regardless of the stored flag.
+			// - If not a reload, play only if we haven't played yet in this tab.
+			const shouldPlay = isReload || !sessionStorage.getItem(SITE_KEY);
+
+			if (shouldPlay) {
+				document.documentElement.classList.add('play-anim');
+				// Re-set the flag so subsequent navigations suppress it again.
+				sessionStorage.setItem(SITE_KEY, '1');
+			}
+
+			// Prevent flicker: reveal “final” state immediately (animated or not)
+			document.documentElement.style.setProperty('--anim-played', '1');
+			if (isReload && 'scrollRestoration' in history) {
+				history.scrollRestoration = 'manual';
+				window.scrollTo(0, 0);
+				window.addEventListener('load', () => window.scrollTo(0, 0), {once: true});
+			}
+		})();
+	</script>
+	{{- partial "head.html" . }}
+</head>
+
+<body class="
+{{- if (or (ne .Kind `page` ) (eq .Layout `archives`) (eq .Layout `search`)) -}}
+{{- print " list" -}} {{- end -}} {{- if eq site.Params.defaultTheme `dark` -}} {{- print " dark" }} {{- end -}} " id="
+	top">
+	{{- partialCached "header.html" . .Page -}}
+	<main class="main">
+		{{- block "main" . }}{{ end }}
+	</main>
+	{{ partialCached "footer.html" . .Layout .Kind (.Param "hideFooter") (.Param "ShowCodeCopyButtons") -}}
+</body>
+
+</html>

@@ -1,0 +1,347 @@
+/* Custom styles added to demo */
+
+:root {
+	--fade-percent: 15%;
+	--theme: rgba(255, 255, 255, 1);
+	--gap: 24px;
+	--content-gap: 20px;
+	--nav-width: 1024px;
+	/*--main-width: 720px;*/
+	--main-width: 66vw;
+	--header-height: 60px;
+	--footer-height: 60px;
+	--radius: 8px;
+
+	--background-col: rgb(240, 240, 240);
+	--theme: rgb(255, 255, 255);
+	--entry: rgb(255, 255, 255);
+	--primary: rgb(30, 30, 30);
+	--secondary: rgb(108, 108, 108);
+	--tertiary: rgb(214, 214, 214);
+	--content: rgb(31, 31, 31);
+	--code-block-bg: rgb(28, 29, 33);
+	--code-bg: rgb(245, 245, 245);
+	--border: rgb(238, 238, 238)
+}
+
+
+body {
+	font-family: Hack, monospace;
+	font-style: normal;
+	letter-spacing: 0px;
+}
+
+h1 {}
+
+.header {
+	text-align: center;
+	align-self: center;
+	justify-self: center;
+	justify-content: center;
+	position: sticky;
+	top: 0;
+	z-index: 100;
+}
+
+
+.dark {
+
+	--background-col: rgb(19, 20, 22);
+	--theme: rgb(29, 30, 32);
+	--entry: rgb(46, 46, 51);
+	--primary: rgb(218, 218, 219);
+	--secondary: rgb(155, 156, 157);
+	--tertiary: rgb(65, 66, 68);
+	--content: rgb(196, 196, 197);
+	--code-block-bg: rgb(46, 46, 51);
+	--code-bg: rgb(55, 56, 62);
+	--border: rgb(51, 51, 51)
+}
+
+.list.dark,
+.dark {
+	background: var(--background-col);
+}
+
+
+
+
+
+/*darkmode toggle */
+.logo-switches {
+	margin-left: 10px;
+}
+
+/*lmeldrum.dev part */
+.logo a {
+	font-size: 150%;
+	padding-right: 12px;
+}
+
+
+
+/* separator bar*/
+
+a {
+	text-decoration: none;
+	text-decoration-color: color-mix(in srgb, var(--primary) 100%, black var(--fade-percent));
+	opacity: 1;
+}
+
+a:hover {
+	opacity: 0.9;
+	text-decoration: underline;
+}
+
+/* contents in header */
+
+#menu a:hover {
+	font-size: 105%;
+	/* or fixed height */
+
+}
+
+.top-menu-separator {
+	z-index: 1001;
+
+	/* center *then* pull left */
+	background: var(--primary);
+	height: 0px;
+	width: 100vw;
+	border: none;
+
+
+	margin: 0px;
+
+}
+
+.play-anim .nav {
+	animation: slide_down_ 1s cubic-bezier(.17, .96, .34, .95) 0s both;
+}
+
+.play-anim .nav2 {
+	animation: slide_down_ .9s cubic-bezier(.17, .96, .34, .95) .1s both;
+}
+
+.play-anim .main {
+	animation: slide_up 0.5s ease-out 0s both;
+}
+
+
+.nav {
+	max-width: none;
+	line-height: 65px;
+	background-color: #161718;
+	z-index: 1002;
+	/* navigation appear below*/
+	flex-direction: column;
+	align-items: center;
+	box-shadow: 0 2px 4px 0 rgba(0, 0, 0, 0.2), 0 10px 20px 0 rgba(0, 0, 0, 0.19);
+	--play-wave-animation: 0;
+}
+
+.nav2 {
+	line-height: 50px;
+	background-color: var(--theme);
+	position: relative;
+	z-index: -1000;
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: space-between;
+	margin-inline-start: auto;
+	margin-inline-end: auto;
+	line-height: var(--header-height);
+	/* navigation appear below*/
+	flex-direction: column;
+	align-items: center;
+	box-shadow: 0 10px 20px 0 rgba(0, 0, 0, 0.19);
+	--play-wave-animation: 0;
+}
+
+
+
+main {
+	box-shadow: 0 4px 8px 0 rgba(0, 0, 0, 0.2), 0 6px 20px 0 rgba(0, 0, 0, 0.19);
+	background: linear-gradient(to bottom,
+			var(--theme),
+			color-mix(in srgb, var(--theme)100%, black 5%));
+}
+
+
+iframe {
+	border-radius: var(--radius) !important;
+}
+
+.first-entry .entry-content {
+	margin: 0px;
+}
+
+.header ul {
+	background: none;
+}
+
+.home-info ul {
+	/* indent size basically*/
+	padding-inline-start: 30px;
+	margin-block: 10px
+}
+
+.social-icons a {
+	padding-left: 16px;
+}
+
+.entry-cover img {
+	border: 1px solid var(--border);
+}
+
+.entry-content p {
+	margin-top: 14px;
+	margin: 0px;
+	margin-bottom: 0px;
+}
+
+.first-entry .entry-content h1 {
+	margin-bottom: 14px;
+}
+
+/* Target the actual card elements (list/archives/terms) */
+.post-entry,
+.term-entry {
+	background: linear-gradient(to bottom,
+			var(--theme),
+			color-mix(in srgb, var(--entry) 80%, black 20%));
+	background-clip: padding-box;
+	border: 0px solid var(--border);
+	border-radius: var(--radius);
+}
+
+/* Optional: a slightly stronger fade on hover */
+.post-entry:hover,
+.term-entry:hover {
+	background: linear-gradient(to bottom,
+			var(--theme),
+			color-mix(in srgb, var(--theme) 80%, black 40%));
+	transition: background 120ms ease, transform 60ms ease;
+	transform: translateY(-3px);
+}
+
+
+.not-found {
+	margin: 30px;
+	font-size: 30px;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	/* horizontal center */
+	justify-content: center;
+	/* vertical center (needs full height) */
+	min-height: 60vh;
+	/* makes sure it has enough vertical space */
+	text-align: center;
+	/* center-align text */
+	opacity: 0;
+	animation: fade_in .4s ease-in 1 forwards;
+}
+
+
+/* pre animation state*/
+.main {
+	opacity: var(--anim-played, 0);
+	transition: opacity 0s;
+}
+
+/* animation on every page click/*
+html:not(.play-anim) .main {
+	animation: fade_in 0.1s linear 0s both;
+}
+
+/* Accessibility: respect user’s reduced-motion preference. */
+@media (prefers-reduced-motion: reduce) {
+	.play-anim {
+		animation: none !important;
+	}
+}
+
+/* header slides down*/
+
+@keyframes slide_up {
+	0% {
+		transform: translateY(10%);
+		opacity: 0;
+	}
+
+	100% {
+		transform: translateY(0%);
+		opacity: 1;
+	}
+}
+
+@keyframes slide_down {
+	0% {
+		transform: translateY(-100%);
+		opacity: 50;
+	}
+
+	100% {
+		transform: translateY(0%);
+		opacity: 1;
+	}
+}
+
+@keyframes slide_down_ {
+	0% {
+		transform: translateY(-5%);
+		opacity: 50;
+	}
+
+	100% {
+		transform: translateY(0%);
+		opacity: 1;
+	}
+}
+
+
+
+
+/* REUSED ANIMATIONS */
+@keyframes fade_in {
+	0% {
+		opacity: 0;
+	}
+
+	100% {
+		opacity: 1;
+	}
+}
+
+/* FANCY 404 PAGE */
+.pc-hammer {
+	display: flex;
+	gap: 10px;
+
+}
+
+@keyframes hammer_smack_left {
+	10% {
+		transform: translateX(-10px) rotate(-20deg);
+	}
+
+}
+
+.hammer {
+	animation-name: hammer_smack_left;
+	animation-timing-function: ease-out;
+	animation-duration: .8s;
+	animation-delay: 0.0s;
+	animation-iteration-count: infinite;
+	animation-direction: auto;
+	animation-fill-mode: forwards;
+	animation-play-state: running;
+	/*	animation: hammer_smack_left .8s ease-out 0.0000s infinite reverse forwards running;*/
+}
+
+.gloat {
+	margin-top: 50px;
+	font-style: italic;
+	font-size: 12px;
+}
