@@ -1,7 +1,11 @@
-#ifndef MYUTILS_H
-#define MYUTILS_H
+#pragma once
+#include <stdbool.h>
+#include <stdlib.h>
+#include <string.h>
+static inline int RAND_RANGE(int min, int max) {
+    return (min + (rand() % (max - min)));
+}
 
-#define streq(s1, s2) (strcmp(s1,s2)==0)
-#define RAND_RANGE(min, max) (min + (rand()%(max-min)))
-
-#endif //MYUTILS_H
+static inline bool streq(const char *s1, const char *s2) {
+    return !strcmp(s1, s2);
+}

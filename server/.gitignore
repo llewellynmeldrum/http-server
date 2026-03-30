@@ -1,18 +1,9 @@
 
 
-# ignore everything
-/*
-# unignore things with extension
-!*.*
-# unignore directories
-!*/
-
-
-#ignore hidden files
 .*
-#unignore this
 !.gitignore
-
-#
+!.gitignore
 *.o
+/bin
+/build
 compile_commands.json
