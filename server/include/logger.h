@@ -12,7 +12,7 @@
 #include "myutils.h"
 #include "native_timer.h"
 
-void dprintbuf(const char* title, const char* buf, size_t sz, size_t linec_to_print);
+void print_buffer_verbose(const char* title, const char* buf, size_t sz, size_t linec_to_print);
 #define pretty_print_buffer(title, buf, lncount) dprintbuf(title, buf, strlen(buf), lncount);
 #define OSTREAM stdout
 
@@ -87,8 +87,6 @@ static const char* loglevel_tostr[] = {
 };
 
 typedef enum LogLevel {
-    LogLevel_EXIT_SUCCESS,
-    LogLevel_EXIT_FAILURE,
     LogLevel_DEBUG,
     LogLevel_DEBUG_RETURN,
     LogLevel_INFO,
@@ -96,9 +94,15 @@ typedef enum LogLevel {
     LogLevel_WARN,
     LogLevel_ERROR,
     LogLevel_FATAL,
+    LogLevel_EXIT_SUCCESS,
+    LogLevel_EXIT_FAILURE,
 } LogLevel;
 
+const static LogLevel LOGLEVEL = LogLevel_NOTICE;
 static inline void log_internal(LogLevel level, const char* filename, int line, const char* fmt, ...) {
+    if (level<LOGLEVEL){
+        return;
+    }
     double ms = ms_since_start();
     log_trace(FMT_CLEAR);
     log_trace("%06.3lfs ", ms / 1000.0);
@@ -137,7 +141,7 @@ static LogSettings log_settings;
 #define LOG_WARN(fmt, ...)          log_internal(LogLevel_WARN,    __FILE_NAME__, __LINE__, fmt,   ##__VA_ARGS__)
 #define LOG_ERROR(fmt, ...)         log_internal(LogLevel_ERROR,   __FILE_NAME__, __LINE__, fmt,  ##__VA_ARGS__)
 #define LOG_FATAL(fmt, ...)         log_internal(LogLevel_FATAL,    __FILE_NAME__, __LINE__, fmt,  ##__VA_ARGS__)
-#define LOG_EXIT(code)              log_internal(code,             __FILE_NAME__, __LINE__, "Exiting. (Code:%d)",code)
+#define LOG_EXIT(code)              log_internal(code+7,             __FILE_NAME__, __LINE__, "Exiting. (Code:%d)",code)
 
 // clang-format on
 

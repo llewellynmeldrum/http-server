@@ -2,43 +2,43 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
   xmlns:xhtml="http://www.w3.org/1999/xhtml">
   <url>
-    <loc>https://adityatelange.github.io/hugo-PaperMod/posts/http_server/</loc>
+    <loc>/posts/http_server/</loc>
     <lastmod>2025-09-23T18:51:34+10:00</lastmod>
   </url><url>
-    <loc>https://adityatelange.github.io/hugo-PaperMod/posts/template/</loc>
+    <loc>/posts/template/</loc>
     <lastmod>2025-01-20T00:00:00+00:00</lastmod>
   </url><url>
-    <loc>https://adityatelange.github.io/hugo-PaperMod/tags/backend/</loc>
+    <loc>/tags/backend/</loc>
     <lastmod>2025-09-23T18:51:34+10:00</lastmod>
   </url><url>
-    <loc>https://adityatelange.github.io/hugo-PaperMod/tags/c/</loc>
+    <loc>/tags/c/</loc>
     <lastmod>2025-09-23T18:51:34+10:00</lastmod>
   </url><url>
-    <loc>https://adityatelange.github.io/hugo-PaperMod/tags/http/</loc>
+    <loc>/tags/http/</loc>
     <lastmod>2025-09-23T18:51:34+10:00</lastmod>
   </url><url>
-    <loc>https://adityatelange.github.io/hugo-PaperMod/</loc>
+    <loc>/</loc>
     <lastmod>2025-09-23T18:51:34+10:00</lastmod>
   </url><url>
-    <loc>https://adityatelange.github.io/hugo-PaperMod/posts/</loc>
+    <loc>/posts/</loc>
     <lastmod>2025-09-23T18:51:34+10:00</lastmod>
   </url><url>
-    <loc>https://adityatelange.github.io/hugo-PaperMod/tags/</loc>
+    <loc>/tags/</loc>
     <lastmod>2025-09-23T18:51:34+10:00</lastmod>
   </url><url>
-    <loc>https://adityatelange.github.io/hugo-PaperMod/tags/this-is-a-tag/</loc>
+    <loc>/tags/this-is-a-tag/</loc>
     <lastmod>2025-01-20T00:00:00+00:00</lastmod>
   </url><url>
-    <loc>https://adityatelange.github.io/hugo-PaperMod/archives.fr/</loc>
+    <loc>/archives.fr/</loc>
   </url><url>
-    <loc>https://adityatelange.github.io/hugo-PaperMod/archives/</loc>
+    <loc>/archives/</loc>
   </url><url>
-    <loc>https://adityatelange.github.io/hugo-PaperMod/categories/</loc>
+    <loc>/categories/</loc>
   </url><url>
-    <loc>https://adityatelange.github.io/hugo-PaperMod/search/</loc>
+    <loc>/search/</loc>
   </url><url>
-    <loc>https://adityatelange.github.io/hugo-PaperMod/search.fr/</loc>
+    <loc>/search.fr/</loc>
   </url><url>
-    <loc>https://adityatelange.github.io/hugo-PaperMod/series/</loc>
+    <loc>/series/</loc>
   </url>
 </urlset>

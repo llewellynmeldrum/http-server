@@ -2,23 +2,23 @@
 <rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:content="http://purl.org/rss/1.0/modules/content/">
   <channel>
     <title>C on lmeldrum.dev</title>
-    <link>https://adityatelange.github.io/hugo-PaperMod/tags/c/</link>
+    <link>/tags/c/</link>
     <description>Recent content in C on lmeldrum.dev</description>
     <image>
       <title>lmeldrum.dev</title>
-      <url>https://adityatelange.github.io/hugo-PaperMod/images/papermod-cover.png</url>
-      <link>https://adityatelange.github.io/hugo-PaperMod/images/papermod-cover.png</link>
+      <url>/images/papermod-cover.png</url>
+      <link>/images/papermod-cover.png</link>
     </image>
     <generator>Hugo -- 0.150.0</generator>
     <language>en</language>
     <copyright>2025, Llewellyn Meldrum</copyright>
     <lastBuildDate>Tue, 23 Sep 2025 18:51:34 +1000</lastBuildDate>
-    <atom:link href="https://adityatelange.github.io/hugo-PaperMod/tags/c/index.xml" rel="self" type="application/rss+xml" />
+    <atom:link href="/tags/c/index.xml" rel="self" type="application/rss+xml" />
     <item>
       <title>The backbone of this site (C HTTP Server)</title>
-      <link>https://adityatelange.github.io/hugo-PaperMod/posts/http_server/</link>
+      <link>/posts/http_server/</link>
       <pubDate>Tue, 23 Sep 2025 18:51:34 +1000</pubDate>
-      <guid>https://adityatelange.github.io/hugo-PaperMod/posts/http_server/</guid>
+      <guid>/posts/http_server/</guid>
       <description>Read aboout Install and Update instructions and sampled configuration templates</description>
     </item>
   </channel>

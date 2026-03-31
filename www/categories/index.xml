@@ -2,16 +2,16 @@
 <rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:content="http://purl.org/rss/1.0/modules/content/">
   <channel>
     <title>Categories on lmeldrum.dev</title>
-    <link>https://adityatelange.github.io/hugo-PaperMod/categories/</link>
+    <link>/categories/</link>
     <description>Recent content in Categories on lmeldrum.dev</description>
     <image>
       <title>lmeldrum.dev</title>
-      <url>https://adityatelange.github.io/hugo-PaperMod/images/papermod-cover.png</url>
-      <link>https://adityatelange.github.io/hugo-PaperMod/images/papermod-cover.png</link>
+      <url>/images/papermod-cover.png</url>
+      <link>/images/papermod-cover.png</link>
     </image>
     <generator>Hugo -- 0.150.0</generator>
     <language>en</language>
     <copyright>2025, Llewellyn Meldrum</copyright>
-    <atom:link href="https://adityatelange.github.io/hugo-PaperMod/categories/index.xml" rel="self" type="application/rss+xml" />
+    <atom:link href="/categories/index.xml" rel="self" type="application/rss+xml" />
   </channel>
 </rss>

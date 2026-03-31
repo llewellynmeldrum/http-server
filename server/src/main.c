@@ -91,7 +91,7 @@ void* handle_client(void* arg) {
     pthread_mutex_unlock(&stats_mutex);
 
     LOG_INFO("Recieved %zuB from client.\n", bytes_received);
-    pretty_print_buffer("RECEIVED MESSAGE", request_data, 0);
+    // pretty_print_buffer("RECEIVED MESSAGE", request_data, 0);
 
     HTTP_Request  request = parse_http_request(request_data, bytes_received);
     HTTP_Response response = build_http_response(request);
@@ -167,17 +167,8 @@ void init_config(int argc, char** argv) {
     }
 }
 
-#define DEBUG
 void handle_socket_bind_err(SOCK_STATUS bind_status) {
-#ifdef DEBUG
-    while (bind_status == SOCK_ERR) {
-        config.port = RAND_RANGE(49152, 65535);
-        config.sock_addr.sin_port = htons(config.port);
-        bind_status =
-            bind(config.server_fd, (sockaddr*)&config.sock_addr, sizeof(config.sock_addr));
-    }
-#else
-    int time_to_sleep = 5;
+    int time_to_sleep = 25;
     LOG_ERROR("Port %hu failed to bind. \n", ntohs(config.sock_addr.sin_port));
     LOG_ERRNO();
     while (bind_status == SOCK_ERR) {
@@ -187,7 +178,6 @@ void handle_socket_bind_err(SOCK_STATUS bind_status) {
             bind(config.server_fd, (sockaddr*)&config.sock_addr, sizeof(config.sock_addr));
         time_to_sleep *= 2;
     }
-#endif
 }
 
 void init_socket() {
@@ -202,7 +192,7 @@ void init_socket() {
     if (bind_status == SOCK_ERR)
         handle_socket_bind_err(bind_status);
 
-    SOCK_STATUS listen_status = listen(config.server_fd, SOCK_QUEUE_LIMIT);
+    SOCK_STATUS listen_status = listen(config.server_fd, MAX_LISTENER_THREADS);
     if (listen_status == SOCK_ERR) {
         LOG_FATAL("Unable to start listening for connections.\n");
         LOG_EXIT(EXIT_FAILURE);

@@ -1,9 +1,6 @@
-# If your site is in 'https', then make sure your base url isn't written using 'http' otherwise your sitemap would
-# contain http (as opposeed to https) URLs. This would affect Google indexing of your URLs.
-baseURL: "https://adityatelange.github.io/hugo-PaperMod/"
 title: lmeldrum.dev 
 copyright: "© 2025, Llewellyn Meldrum"
-theme: [hugo-PaperMod]
+theme: [PaperMod]
 publishDir: ../www/
 
 enableInlineShortcodes: true
