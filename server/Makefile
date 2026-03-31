@@ -24,7 +24,7 @@ DEPS	:=$(patsubst $(OBJ_DIR)/%$(OBJ_EXT),$(OBJ_DIR)/%.d, $(OBJS))
 
 $(OBJ_DIR)/%$(OBJ_EXT) : $(SRC_DIR)/%$(SRC_EXT) 
 ifeq (${QUIET}, 0)
-	@$(ECHO_COMP_BANNER)
+#	@$(ECHO_COMP_BANNER)
 	@echo
 	@printf '  %s\n' $(CC)
 	@printf '    %s\n' $(CFLAGS)
@@ -36,7 +36,7 @@ endif
 # LINK 
 $(EXE): $(EXE_DIR) $(OBJ_DIR) $(OBJS)
 ifeq (${QUIET}, 0)
-	@$(ECHO_LINK_BANNER)
+#	@$(ECHO_LINK_BANNER)
 	@echo
 	@printf '  %s\n' $(CC)
 	@printf '    %s\n' $(CFLAGS)
@@ -53,10 +53,10 @@ endif
 -include $(DEPS)
 # executing binary
 run: $(EXE)
-	@tput bold
+#	@tput bold
 	@printf "Build finished in "
 	@printf " w/ $(NCPU) cpus...\n"
-	@tput sgr0 
+#	@tput sgr0 
 	@$(ECHO_EXE_BANNER)
 	sudo ./$(EXE) $(ARGS)
 

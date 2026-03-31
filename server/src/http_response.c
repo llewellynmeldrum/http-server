@@ -14,7 +14,7 @@
 
 #include "http_response_internal.h"
 
-HTTP_Request parse_http_request(char* data, size_t data_len) {
+HTTP_Request parse_http_request(Byte data[BUF_SZ], size_t data_len) {
     HTTP_Request req = (HTTP_Request){ .data = data, .data_len = data_len };
 
     char method_str[MAX_METHOD_STRLEN];
