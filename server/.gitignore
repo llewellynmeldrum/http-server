@@ -8,3 +8,5 @@
 /build
 compile_commands.json
 www/*
+*.md
+!README.md
