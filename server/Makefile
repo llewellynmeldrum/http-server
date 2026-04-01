@@ -1,130 +1,102 @@
-.PHONY: all clean run debug help h ? docs 
+.PHONY: all build test test-build clean
+# ---
+#MAKEFLAGS   +=-j8
 
-all: 
-	./setup-env.sh 
+CC			:=clang
+CPPFLAGS    :=-Iinclude
+CFLAGS      :=-std=gnu23
+CFLAGS      +=-Wall -Werror
+CFLAGS      +=-Wimplicit-fallthrough
+CFLAGS      +=-Wno-unused
+CFLAGS      +=-MMD -MP
+CFLAGS      +=-fno-show-column
+CFLAGS      +=-fno-diagnostics-show-option
+CFLAGS      +=-fdiagnostics-fixit-info
 
-asan: 
-	./setup-env.sh 
+LDFLAGS     := 
+LDLIBS      := 
 
-run-from-script: run
+# ---
+APP_SRC     :=$(shell find ./src -type f -name '*.c')
+APP_OBJ     :=$(patsubst ./src/%.c,./build/%.o,$(APP_SRC))
+APP_DEPS    :=$(APP_OBJ:.o=.d)
+APP_EXE     :=./bin/server
+
+TEST_SRC    :=$(shell find ./test -type f -name '*.c')
+TEST_OBJ    :=$(patsubst ./test/%.c,./build/test/%.o,$(TEST_SRC))
+TEST_DEPS   :=$(TEST_OBJ:.o=.d)
+TEST_EXES   := $(patsubst ./build/test/%.o,./bin/test/%,$(TEST_OBJ))
+TEST_CPPFLAGS :=-Itest
+
+CORE_OBJ    :=$(filter-out ./build/main.o,$(APP_OBJ))
+# ---
+
+all: run
 
 
-SRC_DIR	:=src
-OBJ_DIR :=build
+test-build: $(TEST_EXES) 
 
-CFLAGS+= -g -fsanitize=thread -fno-omit-frame-pointer
-SRC_EXT	:=.c
-OBJ_EXT :=.o
+test: $(TEST_EXES)
+	@for t in $^; do \
+	echo "Running $$t"; \
+		$$t || exit 1; \
+	done
 
+build: $(APP_EXE)
+run: $(APP_EXE)
+	#sudo ./$(APP_EXE) $(ARGS)
+	./$(APP_EXE) $(ARGS)
 
-SRC 	:=$(wildcard $(SRC_DIR)/*$(SRC_EXT))
-OBJS 	:=$(patsubst $(SRC_DIR)/%$(SRC_EXT),$(OBJ_DIR)/%$(OBJ_EXT),$(SRC))
-DEPS	:=$(patsubst $(OBJ_DIR)/%$(OBJ_EXT),$(OBJ_DIR)/%.d, $(OBJS))
+# NOTE: Link APP (build main executable)
+$(APP_EXE): $(APP_OBJ)
+	@mkdir -p $(dir $@)
+	@$(CC) $(LDFLAGS) $^ $(LDLIBS) -o $@
 
+# NOTE: Link TESTS (build each executable)
+$(TEST_EXES): ./bin/test/%: ./build/test/%.o $(CORE_OBJ)
+	@mkdir -p $(dir $@)
+	@$(CC) $(LDFLAGS) $^ $(LDLIBS) -o $@
 
-$(OBJ_DIR)/%$(OBJ_EXT) : $(SRC_DIR)/%$(SRC_EXT) 
-ifeq (${QUIET}, 0)
-#	@$(ECHO_COMP_BANNER)
-	@echo
-	@printf '  %s\n' $(CC)
-	@printf '    %s\n' $(CFLAGS)
-	@printf '    %s\n'  $@
-	@printf '\n' 
-endif
-	@$(CC) $(CFLAGS) -c $< -o $@ 
+# ---
 
-# LINK 
-$(EXE): $(EXE_DIR) $(OBJ_DIR) $(OBJS)
-ifeq (${QUIET}, 0)
-#	@$(ECHO_LINK_BANNER)
-	@echo
-	@printf '  %s\n' $(CC)
-	@printf '    %s\n' $(CFLAGS)
-	@printf '    %s\n' $(LDFLAGS)
-	@printf '    %s\n' $(OBJS)
-	@printf '\n' 
-	@printf '    %s\n' $(EXE)
-	@printf '\n' 
-	@printf '    %s\n' $(LDLIBS)
-	@printf '\n' 
-endif
-	@$(CC) $(CFLAGS) $(LDFLAGS) $(OBJS) -o $(EXE) $(LDLIBS)
+# NOTE: Compile APP
+./build/%.o : ./src/%.c
+	@mkdir -p $(dir $@)
+	@$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
+    
+# NOTE: Compile TESTS
+./build/test/%.o : ./test/%.c
+	@mkdir -p $(dir $@)
+	@$(CC) $(CPPFLAGS) $(TEST_CPPFLAGS) $(CFLAGS) -c $< -o $@
 
--include $(DEPS)
-# executing binary
-run: $(EXE)
-#	@tput bold
-	@printf "Build finished in "
-	@printf " w/ $(NCPU) cpus...\n"
-#	@tput sgr0 
-	@$(ECHO_EXE_BANNER)
-	sudo ./$(EXE) $(ARGS)
+# ---
 
-	
-#NOTE: AVOID PUTTING TARGETS IN CLEAN COMMAND! BE VERY SPECIFIC SO YOU DONT NUKE YOUR SOURCE FILES ON ACCIDENT
+-include $(APP_DEPS) $(TEST_DEPS)
+
+asan: ASAN_ENV=ASAN_OPTIONS=abort_on_error=0
+asan: CFLAGS+=-fsanitize=address -fno-omit-frame-pointer -g
+asan: LDFLAGS+=-fsanitize=address -fno-omit-frame-pointer -g
+asan:clean  all
+
+tsan: TSAN_ENV=TSAN_OPTIONS=abort_on_error=0
+tsan: CFLAGS+=-fsanitize=thread -fno-omit-frame-pointer -g
+tsan: LDFLAGS+=-fsanitize=thread -fno-omit-frame-pointer -g
+tsan: all
+
+# ---
 clean: 
-	$(ECHO_CLEAN_BANNER)
-	rm -f build/*.o build/**/*.o  bin/*
+	rm -rf build bin
 
-# ------------ DEBUGGING ------------ #
-debug: $(EXE)
-	$(DEBUGGER) -o run -- $(EXE) $(TERM_COLS) $(ARGS)
+# ---
+debug: $(APP_EXE)
+	$(DEBUGGER) -o run -- $(APP_EXE) $(ARGS)
 
-	
-# Address san: lower overhead than thread-san, cleaner stack traces,
-
-# ------------ EXTRAS ------------ #
-$(OBJ_DIR): $(OBJ_DIR)/game
-	@mkdir -p $@
-
-$(EXE_DIR):
-	@mkdir -p $@
-
-$(OBJ_DIR)/game:
-	@mkdir -p $@
-
-help h ? docs: HELP
-HELP:
-	
-	@$(FMT_REV)
-	@printf "===== MAKE VARIABLES =====\n"; $(FMT_RESET)
-	@$(FMT_ALT1) 	printf "SRC      = $(SRC)\n" 
-	@$(FMT_ALT2) 	printf "EXE_DIR  = $(EXE_DIR )\n"
-	@$(FMT_ALT1)	printf "EXE_NAME = $(EXE_NAME)\n"
-	@$(FMT_ALT2)	printf "EXE      = $(EXE)\n"
-	@$(FMT_ALT1)	printf "SRC_DIR  = $(SRC_DIR)\n"
-	@$(FMT_ALT2)	printf "OBJ_DIR  = $(OBJ_DIR)\n"
-	@$(FMT_ALT1)	printf "SRC_EXT  = $(SRC_EXT)\n"
-	@$(FMT_ALT2)	printf "OBJ_EXT  = $(OBJ_EXT)\n"
-	@$(FMT_ALT1)	printf "CC     = $(CC)\n"
-	@$(FMT_ALT2)	printf "SRC      = $(SRC)\n"
-	@$(FMT_ALT1)	printf "OBJS     = $(OBJS)\n"
-	@$(FMT_ALT2)	printf "CFLAGS  = $(CFLAGS)\n"
-	@$(FMT_ALT1)	printf "LDFLAGS  = $(LDFLAGS)\n"
-	@$(FMT_ALT2)	printf "LDLIBS   = $(LDLIBS)\n"
-
-
-
-
-# ------------ PRETTY PRINTING ------------ #
-FMT_RESET	:=tput sgr0;
-FMT_REDBANNER	:=tput rev; tput bold; tput setaf 1;
-FMT_GREENBANNER	:=tput rev; tput bold; tput setaf 2;
-FMT_YELLOWBANNER:=tput rev; tput bold; tput setaf 3;
-FMT_REV		:=tput rev; tput bold;
-
-
-FMT_ALT1	:= tput setaf 7;
-FMT_ALT2	:= tput sgr0;
-
-
-ECHO_LINK_BANNER := @$(FMT_YELLOWBANNER) 	printf " LINKING OBJ to BIN -> "; $(FMT_RESET) 	printf "\t"
-ECHO_COMP_BANNER := @$(FMT_GREENBANNER)		printf " COMPILE SRC to OBJ -> "; $(FMT_RESET)	printf "\t"
-ECHO_EXE_BANNER := @$(FMT_REDBANNER) 		printf " EXECUTING BINARY -> "; $(FMT_RESET)	printf "\t"
-ECHO_CLEAN_BANNER:= @$(FMT_REV) 		printf " REMOVING EXEUTABLES AND OBJECT FILES... "; $(FMT_RESET)printf "\t"
-
-
-# EXTRA MAKEFILE STUFF:
-# :_______1-1_______: To exclude certain files from compilation:
-# EXCLUDE_PAT	:= unit_tests.c
-# SRC 		:= $(filter-out src/$(EXCLUDE_SRC), $(wildcard src/*.c))
+# ---
+UNAME:= $(shell uname)
+ifeq ($(UNAME), Darwin)
+	DEBUGGER :=lldb
+else ifeq ($(UNAME), Linux)
+	DEBUGGER :=gdb
+else
+	$(error Unsupported platform.)
+endif

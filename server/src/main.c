@@ -13,6 +13,7 @@
 #include "HTTP_Metadata.h"
 #include "StringView.h"
 
+#include "HttpRequest.h"
 #include "http_consts.h"
 #include "http_response.h"
 #include "logger.h"
@@ -24,23 +25,24 @@
 
 static const unsigned int HTTP_TCP_PORT = 80;
 
-static ServerStats  stats = (ServerStats){};
 static ServerConfig config;
 
 static void handle_SIGINT(int sig);
-static void init_config(int argc, char** argv);
+static void init_config(int argc, char **argv);
 static void init_socket();
 static void init_threads();
 static void init_responders();
 
-static void* handle_client(void* arg);
+static void *handle_client(void *arg);
 
-u64  program_epoch_ns;
+u64 program_epoch_ns;
 char document_root[PATH_MAX] = {};
 
-int main(int argc, char** argv) {
+int main(int argc, char **argv) {
     signal(SIGINT, handle_SIGINT);
     program_epoch_ns = get_current_ns();
+    handle_client((void *)0);
+    exit(EXIT_SUCCESS);
 
     init_config(argc, argv);
     init_socket();
@@ -50,22 +52,24 @@ int main(int argc, char** argv) {
     bool accepting_connections = true;
     while (accepting_connections) {
         sockaddr_in client_addr;
-        socklen_t   client_addr_len = sizeof(client_addr);
+        socklen_t client_addr_len = sizeof(client_addr);
         // BUG: Why is this a heap allocation?
-        FileDescriptor* client = malloc(sizeof(FileDescriptor));
+        FileDescriptor *client = malloc(sizeof(FileDescriptor));
         LOG_INFO(FSTR_AVALIABLE_AT, config.port, config.hostname, config.port);
         if (!client) {
             LOG_FATAL("Unable to allocate memory for client FD!");
             LOG_EXIT(EXIT_FAILURE);
         }
-        *client = accept(config.server_fd, (sockaddr*)&client_addr, &client_addr_len);
+        *client = accept(config.server_fd, (sockaddr *)&client_addr,
+                         &client_addr_len);
         if (*client == SOCK_ERR) {
             LOG_FATAL("Unable to accept client connection:");
             LOG_EXIT(EXIT_FAILURE);
         }
 
         // dispatch and detach thread
-        pthread_create(&client_handler_thread, nullptr, handle_client, (void*)client);
+        pthread_create(&client_handler_thread, nullptr, handle_client,
+                       (void *)client);
         pthread_detach(client_handler_thread);
     }
 
@@ -82,40 +86,28 @@ void init_responders(void) {
     }
 }
 
-typedef enum {
-    HttpRequestHeaderHost,
-    HttpRequestHeaderConnection,
-    HttpRequestHeaderContent_Length,
-    HttpRequestHeader__COUNT,
-} HttpRequestHeader;
-
-// headers are case insensitive
-const static char* HttpRequestHeader_toStr[] = {
-    "host",
-    "connection",
-    "content-length",
-};
-
-typedef struct {
-    HttpRequestMethod method;
-    StringView        target_sv;
-    StringView        query_sv;
-    HttpVersion       version;
-    StringView        headers[HttpRequestHeader__COUNT];
-} HttpRequest;
-
 HttpRequestMethod parse_HttpRequestMethod(const StringView sv) {
     for (HttpRequestMethod i = 0; i < HttpRequestMethod__COUNT; i++) {
-        const char* method_str = HttpRequestMethod_toStr[i];
+        const char *method_str = HttpRequestMethod_toStr[i];
         if (streq(method_str, sv.ptr)) {
             return i;
         }
     }
     return HttpRequestMethod_PARSE_ERROR;
 }
-HttpRequest parse_HttpRequest(ByteStream* stream) {
+
+HttpVersion parse_HttpVersion(const StringView sv) {
+    for (HttpVersion i = 0; i < HttpVersion__COUNT; i++) {
+        const char *version_str = HttpVersion_toStr[i];
+        if (streq(version_str, sv.ptr)) {
+            return i;
+        }
+    }
+    return HttpVersion__PARSE_ERROR;
+}
+HttpRequest parse_HttpRequest(ByteStream *stream) {
     HttpRequest res = {};
-    StringView  method_sv = bs_consumeWord(stream);
+    StringView method_sv = bs_consumeWord(stream);
     res.method = parse_HttpRequestMethod(method_sv);
 
     (void)bs_consumeWhitespace(stream);
@@ -127,53 +119,66 @@ HttpRequest parse_HttpRequest(ByteStream* stream) {
     if (bs_peek(stream) == '?') {
         query_sv = bs_consumeWord(stream);
     }
+    res.query_sv = query_sv;
     (void)bs_consumeWhitespace(stream);
 
-    const StringView whitespace_sv = sv_make(" \t\r\n");
-    StringView       version_sv = bs_consumeUntilAnyDelim(stream, whitespace_sv);
-    // NOTE: We dont parse the body of any request. None of the request methods we support have
-    // NOTE: We dont parse the body of any request. None of the request methods we support have
-    // anything meaningful in their body's, if they even have them.
+    const StringView whitespace_sv = sv_make("\r\n");
+    StringView version_sv = bs_consumeUntilAnyDelim(stream, whitespace_sv);
+    res.version = parse_HttpVersion(version_sv);
+
+    const StringView endOfLine = bs_consumeN(stream, 2);
+    if (!sv_matchesStr(endOfLine, "\r\n")) {
+        // BUG: no CRLF detected after method line
+        return res;
+    }
+    // until there is an empty line, parse like there is a header
+    const StringView header_delims_sv = sv_make(" \r\n:");
+    StringView start_of_line = bs_consumeN(stream, 2);
+    StringViewPair svp_buf[MAX_HEADER_COUNT] = {};
+    while (!sv_matchesStr(start_of_line, "\r\n")) {
+        // 1. consume until : or \n or \r
+        // if it was a :, consume until newline. That is your header val
+        StringView lhs = bs_consumeUntilAnyDelim(stream, header_delims_sv);
+        if (bs_peek(stream) != ':') {
+            // BUG:  Malformed header field
+            break;
+        }
+        StringView rhs = bs_consumeUntilAnyDelim(stream, whitespace_sv);
+        svp_buf[res.num_headers++] = svp_make(lhs, rhs);
+    }
+    res.headers = calloc(res.num_headers, sizeof(StringViewPair));
+    memcpy(res.headers, svp_buf, res.num_headers * sizeof(StringViewPair));
+    // NOTE: We dont parse the body or headers atm.
     return res;
 }
 
-void* handle_client(void* arg) {
-    Byte buf[BUF_SZ] = {};
+void *handle_client(void *arg) {
 
-    Byte*  fungus = {};
-    size_t good_size = arrlen(buf);
-    size_t bad_size = arrlen(fungus);
+    //    FileDescriptor client_fd = *(int *)arg;
 
-    FileDescriptor client_fd = *(int*)arg;
+    Byte test_get_header_buf[] = "GET /contact HTTP/1.1"
+                                 "Host: example.com"
+                                 "User-Agent: curl/8.6.0"
+                                 "Accept: */*";
+    int n_bytes_received = arrlen(test_get_header_buf);
+    LOG_INFO("Recieved %zuB from client.", n_bytes_received);
 
-    size_t nbytes_received = recv(client_fd, buf, arrlen(buf), 0);
-    if (nbytes_received == 0) {
-        LOG_FATAL("Connection made with client, but 0 bytes receieved.\n");
-        LOG_ERRNO();
-        return nullptr;
-    }
-
-    LOG_INFO("Recieved %zuB from client.", nbytes_received);
-    ByteStream stream = bs_make(buf, nbytes_received);
-
+    ByteStream stream = bs_make(test_get_header_buf, n_bytes_received);
     LOG_DEBUG("Parsing http request...");
     HttpRequest http_request = parse_HttpRequest(&stream);
+    LOG_DEBUG("Parsed http request:");
+    LOG_EXPR(http_request);
+
+    (void)http_request;
     // do some testing, with some dummy input headers. Just provide raw data
 
     /*
-    TODO:  start here! goto
     Resource     resource = resolveRequest(http_request);
     HttpResponse response = generateResponse(resource);
     Byte*        outgoing_data = encodeResponse(response);
     */
 
-    size_t bytes_sent = send(client_fd, nullptr, NULL, 0);
-    if (bytes_sent == SOCK_ERR) {
-        LOG_FATAL("Failed to send().\n");
-        return nullptr;
-    } else {
-        LOG_INFO("Succesfully sent (%zu) bytes in response.\n", bytes_sent);
-    }
+    return nullptr;
 }
 
 // sigint handler
@@ -184,7 +189,7 @@ void handle_SIGINT(int sig) {
     LOG_EXIT(EXIT_SUCCESS);
 }
 
-void init_config(int argc, char** argv) {
+void init_config(int argc, char **argv) {
     int num_args = argc - 1;
     config.is_localhost = false;
     strcpy(config.hostname, "lmeldrum.dev");
@@ -198,7 +203,8 @@ void init_config(int argc, char** argv) {
     if (num_args == 1) {
         if (streq(argv[1], "-l") || streq(argv[1], "--local")) {
             config.is_localhost = true;
-        } else if (streq(argv[1], "-h") || streq(argv[1], "-?") || streq(argv[1], "--help")) {
+        } else if (streq(argv[1], "-h") || streq(argv[1], "-?") ||
+                   streq(argv[1], "--help")) {
             LOG_INFO(STR_USAGE);
             LOG_EXIT(EXIT_SUCCESS);
         }
@@ -225,8 +231,8 @@ void handle_socket_bind_err(SOCK_STATUS bind_status) {
     while (bind_status == SOCK_ERR) {
         LOG_INFO("Trying again in %ds... \n", time_to_sleep);
         sleep(time_to_sleep);
-        bind_status =
-            bind(config.server_fd, (sockaddr*)&config.sock_addr, sizeof(config.sock_addr));
+        bind_status = bind(config.server_fd, (sockaddr *)&config.sock_addr,
+                           sizeof(config.sock_addr));
         time_to_sleep *= 2;
     }
 }
@@ -239,7 +245,8 @@ void init_socket(void) {
     }
 
     SOCK_STATUS bind_status =
-        bind(config.server_fd, (sockaddr*)&config.sock_addr, sizeof(config.sock_addr));
+        bind(config.server_fd, (sockaddr *)&config.sock_addr,
+             sizeof(config.sock_addr));
     if (bind_status == SOCK_ERR)
         handle_socket_bind_err(bind_status);
 
@@ -250,6 +257,4 @@ void init_socket(void) {
     }
 }
 
-void init_threads(void) {
-    pthread_mutex_init(&stats_mutex, nullptr);
-}
+void init_threads(void) { pthread_mutex_init(&stats_mutex, nullptr); }

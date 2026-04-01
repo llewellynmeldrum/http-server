@@ -14,6 +14,7 @@
 #define CYAN "\e[34m"
 #define GREEN "\e[32m"
 #define YELLOW "\e[33m"
+#define PUPLE2 "\e[35m"
 #define IYELLOW "\e[7;33m"
 #define PINK "\e[35m"
 #define LIRED "\e[91m"
