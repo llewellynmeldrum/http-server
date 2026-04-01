@@ -50,35 +50,33 @@ run: $(APP_EXE)
 # NOTE: Link APP (build main executable)
 $(APP_EXE): $(APP_OBJ)
 	@mkdir -p $(dir $@)
-	@$(CC) $(LDFLAGS) $^ $(LDLIBS) -o $@
+	$(CC) $(LDFLAGS) $^ $(LDLIBS) -o $@
 
 # NOTE: Link TESTS (build each executable)
 $(TEST_EXES): ./bin/test/%: ./build/test/%.o $(CORE_OBJ)
 	@mkdir -p $(dir $@)
-	@$(CC) $(LDFLAGS) $^ $(LDLIBS) -o $@
+	$(CC) $(LDFLAGS) $^ $(LDLIBS) -o $@
 
 # ---
 
 # NOTE: Compile APP
 ./build/%.o : ./src/%.c
 	@mkdir -p $(dir $@)
-	@$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
+	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
     
 # NOTE: Compile TESTS
 ./build/test/%.o : ./test/%.c
 	@mkdir -p $(dir $@)
-	@$(CC) $(CPPFLAGS) $(TEST_CPPFLAGS) $(CFLAGS) -c $< -o $@
+	$(CC) $(CPPFLAGS) $(TEST_CPPFLAGS) $(CFLAGS) -c $< -o $@
 
 # ---
 
 -include $(APP_DEPS) $(TEST_DEPS)
 
-asan: ASAN_ENV=ASAN_OPTIONS=abort_on_error=0
 asan: CFLAGS+=-fsanitize=address -fno-omit-frame-pointer -g
 asan: LDFLAGS+=-fsanitize=address -fno-omit-frame-pointer -g
 asan:clean  all
 
-tsan: TSAN_ENV=TSAN_OPTIONS=abort_on_error=0
 tsan: CFLAGS+=-fsanitize=thread -fno-omit-frame-pointer -g
 tsan: LDFLAGS+=-fsanitize=thread -fno-omit-frame-pointer -g
 tsan: all

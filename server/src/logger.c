@@ -1,5 +1,4 @@
-
-#include "logger.h"
+#include "Logger.h"
 #include <limits.h>
 #include <stdarg.h>
 #include <stdio.h>
@@ -37,6 +36,7 @@ void LOG_LOWER_SEPARATOR() {
 /* Whether or not to print a \n IFF CRLF (windows style), or to ignore CR.*/
 #define DBPRINTBUF_CRLF_ONLY true
 
+// print a buffer with info on nonprintable chars
 void print_buffer_verbose(const char* title, const char* buf, size_t sz, size_t nlines) {
     log_trace(UNDERLINE BOLD);
     log_trace(UNDERLINE BOLD "%s: (%p)", title, title);

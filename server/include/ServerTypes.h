@@ -1,6 +1,4 @@
-#ifndef SERVER_TYPES_H
-#define SERVER_TYPES_H
-
+#pragma once
 #include <netinet/in.h>
 #include <stdbool.h>
 
@@ -15,5 +13,3 @@ typedef struct ServerConfig {
     sockaddr_in    sock_addr;
     FileDescriptor server_fd;
 } ServerConfig;
-
-#endif  // SERVER_TYPES_H

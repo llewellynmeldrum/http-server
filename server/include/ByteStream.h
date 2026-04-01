@@ -1,32 +1,35 @@
 #pragma once
 // ByteStream.h
+#include "CWrappers.h"
+#include "Logger.h"
 #include "StringView.h"
-#include "myutils.h"
-#include "types.h"
 #include <ctype.h>
 #include <stddef.h>
 #include <stdio.h>
 typedef struct {
-    Byte *data;
+    Byte*  data;
     size_t size;
     size_t next;
 } ByteStream;
 
-static inline char bs_peek(const ByteStream *bs) {
+static inline char bs_peek(const ByteStream* bs) {
     return bs->next < bs->size ? bs->data[bs->next] : '\0';
 }
-static inline char bs_consume(ByteStream *bs) {
+static inline char bs_peek2(const ByteStream* bs) {
+    return bs->next + 1 < bs->size ? bs->data[bs->next + 1] : '\0';
+}
+static inline char bs_consume(ByteStream* bs) {
     return bs->next < bs->size ? bs->data[bs->next++] : '\0';
 }
-static inline char bs_peekPrevious(const ByteStream *bs) {
+static inline char bs_peekPrevious(const ByteStream* bs) {
     return bs->next - 1 >= 0 ? bs->data[bs->next - 1] : '\0';
 }
 
-static inline Byte *bs_getCurrent(const ByteStream *bs) {
+static inline Byte* bs_getCurrent(const ByteStream* bs) {
     return bs->next < bs->size ? &bs->data[bs->next] : nullptr;
 }
 
-static inline size_t bs_consumeWhitespace(ByteStream *bs) {
+static inline size_t bs_consumeWhitespace(ByteStream* bs) {
     size_t n_whitespace = 0;
 
     while (isspace(bs_peek(bs))) {
@@ -34,8 +37,7 @@ static inline size_t bs_consumeWhitespace(ByteStream *bs) {
     }
     return n_whitespace;
 }
-static inline StringView bs_consumeUntilAnyDelim(ByteStream *bs,
-                                                 StringView delims) {
+static inline StringView bs_consumeUntilAnyDelim(ByteStream* bs, StringView delims) {
     StringView res = {};
     res.ptr = bs_getCurrent(bs);
     size_t sv_len = 0;
@@ -46,16 +48,16 @@ static inline StringView bs_consumeUntilAnyDelim(ByteStream *bs,
     }
 
     if (sv_len >= BUF_SZ) {
-        fprintf(stderr,
-                "Word is longer than BUF_SZ (%zu), result may be truncated.",
-                BUF_SZ);
+        fprintf(stderr, "Word is longer than BUF_SZ (%zu), result may be truncated.", BUF_SZ);
     }
     res.len = sv_len;
     return res;
 }
 
-static inline StringView bs_consumeUntilDelim(ByteStream *bs,
-                                              const char delim) {
+static inline void bs_debugLog(ByteStream* bs) {
+    print_buffer_verbose("ByteStream", bs->data, bs->size, 0);
+}
+static inline StringView bs_consumeUntilDelim(ByteStream* bs, const char delim) {
     StringView res = {};
     res.ptr = bs_getCurrent(bs);
     size_t sv_len = 0;
@@ -65,31 +67,27 @@ static inline StringView bs_consumeUntilDelim(ByteStream *bs,
     }
 
     if (sv_len >= BUF_SZ) {
-        fprintf(stderr,
-                "Word is longer than BUF_SZ (%zu), result may be truncated.",
-                BUF_SZ);
+        fprintf(stderr, "Word is longer than BUF_SZ (%zu), result may be truncated.", BUF_SZ);
     }
     res.len = sv_len;
     return res;
 }
 
-static inline StringView bs_consumeN(ByteStream *bs, size_t n) {
+static inline StringView bs_consumeN(ByteStream* bs, size_t n) {
     if (n >= BUF_SZ) {
-        fprintf(stderr,
-                "Word is longer than BUF_SZ (%zu), result may be truncated.",
-                BUF_SZ);
+        fprintf(stderr, "Word is longer than BUF_SZ (%zu), result may be truncated.", BUF_SZ);
     }
     StringView res = {};
     res.ptr = bs_getCurrent(bs);
     size_t slice_len = 0;
-    while (bs_peek(bs)) {
+    while (bs_peek(bs) && slice_len < n) {
         slice_len++;
         bs_consume(bs);
     }
     res.len = slice_len;
     return res;
 }
-static inline StringView bs_consumeWord(ByteStream *bs) {
+static inline StringView bs_consumeWord(ByteStream* bs) {
     StringView res = {};
     res.ptr = bs_getCurrent(bs);
     size_t sv_len = 0;
@@ -99,15 +97,14 @@ static inline StringView bs_consumeWord(ByteStream *bs) {
     }
 
     if (sv_len >= BUF_SZ) {
-        fprintf(stderr,
-                "Word is longer than BUF_SZ (%zu), result may be truncated.",
-                BUF_SZ);
+        fprintf(stderr, "Word is longer than BUF_SZ (%zu), result may be truncated.", BUF_SZ);
     }
     res.len = sv_len;
+    //    LOG_DEBUG("(%d)%.*s", res.len, res.len, res.ptr);
     return res;
 }
 
-static inline ByteStream bs_make(void *data, size_t size) {
+static inline ByteStream bs_make(void* data, size_t size) {
     return (ByteStream){
         .data = data,
         .size = size,

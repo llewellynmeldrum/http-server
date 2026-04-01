@@ -1,7 +1,7 @@
 #pragma once
-#include "types.h"
+#include "CWrappers.h"
 #include <sys/stat.h>
-// src/file_handling.c
+// src/IOHandler.c
 
 char* parse_file_extension(char* filename);
 char* read_file(const char* filename, size_t file_size);

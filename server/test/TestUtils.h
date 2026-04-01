@@ -1,3 +1,3 @@
-#include "../include/types.h"
+#include "../include/CWrappers.h"
 #define LOGLEVEL LogLevel_DEBUG
-#include "../include/logger.h"
+#include "../include/Logger.h"
