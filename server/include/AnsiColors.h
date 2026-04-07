@@ -1,6 +1,9 @@
 #pragma once
-#define FMT_CLEAR "\e[0m"
 #define BOLD "\e[1m"
+#define UNDERLINE "\e[4m"
+#define UNDERBOLD "\e[1;4m"
+
+#define FMT_CLEAR "\e[0m"
 #define ITALIC "\e[4m"
 #define REV "\e[7m"
 #define BOLD_RED "\e[1;31m"
@@ -21,4 +24,3 @@
 #define RED "\e[31m"
 #define DWHITE "\e[96m"
 #define BOLD_DWHITE "\e[1;96m"
-#define UNDERLINE "\e[4m"

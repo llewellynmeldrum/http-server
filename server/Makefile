@@ -44,8 +44,15 @@ test: $(TEST_EXES)
 
 build: $(APP_EXE)
 run: $(APP_EXE)
-	#sudo ./$(APP_EXE) $(ARGS)
-	./$(APP_EXE) $(ARGS)
+	@cols=$$(tput cols); \
+	bg=$$(tput setab 1; tput smul); \
+	fg=$$(tput setaf 7); \
+	reset=$$(tput sgr0); \
+	text="$$(gdate +'%I:%M%P') - $(APP_EXE) $(ARGS)"; \
+	len=$$(printf "%s" "$$text" | wc -m); \
+	pad=$$((cols - len)); \
+	printf "%s%s%s%*s%s\n" "$$bg" "$$fg" "$$text" $$pad "" "$$reset"
+	@./$(APP_EXE) $(ARGS)
 
 # NOTE: Link APP (build main executable)
 $(APP_EXE): $(APP_OBJ)

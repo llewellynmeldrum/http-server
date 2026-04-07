@@ -10,10 +10,10 @@
 #define LOWER_SEPARATOR_CH "▔"
 #define UPPER_SEPARATOR_CH "▁"
 
-#define LOG_SYMBOL_REPL(symbol, repl)                                                              \
-    do {                                                                                           \
-        log_trace("(" UNDERLINE BOLD symbol FMT_CLEAR ")='" PURPLE repl FMT_CLEAR "', ");          \
-    } while (0);
+void logSymbolReplacement(const char* symbol, const char* replacement) {
+    log_trace("(%s%s%s)", UNDERBOLD, symbol, FMT_CLEAR);
+    log_trace("=%s%s%s,", PURPLE, replacement, FMT_CLEAR);
+}
 
 bool show_pretty_print_guide = true;
 
@@ -36,10 +36,14 @@ void LOG_LOWER_SEPARATOR() {
 /* Whether or not to print a \n IFF CRLF (windows style), or to ignore CR.*/
 #define DBPRINTBUF_CRLF_ONLY true
 
+// printLongBuffer(const char* buf, size_t sz)
+// printBuffer(const char* buf, size_t sz) - single line
 // print a buffer with info on nonprintable chars
+void printBuffer(const char* buf, size_t sz) {
+}
 void print_buffer_verbose(const char* title, const char* buf, size_t sz, size_t nlines) {
-    log_trace(UNDERLINE BOLD);
-    log_trace(UNDERLINE BOLD "%s: (%p)", title, title);
+    log_trace(UNDERBOLD);
+    log_trace(UNDERBOLD "%s: (%p)", title, title);
     if (nlines > 0) {
         log_trace("PRINTING FIRST %zu LINES:%s\n", nlines, FMT_CLEAR);
     } else {
@@ -65,34 +69,35 @@ void print_buffer_verbose(const char* title, const char* buf, size_t sz, size_t 
 
         switch (ch) {
         case ' ':
-            log_trace(UNDERLINE BOLD " " FMT_CLEAR);
+            log_trace(UNDERBOLD " " FMT_CLEAR);
             break;
 
         // only CRLF should print newline
         case '\n':
-            log_trace(UNDERLINE BOLD "↓" FMT_CLEAR);
+            log_trace(UNDERBOLD "↓" FMT_CLEAR);
             queue_newline = (DBPRINTBUF_CRLF_ONLY) ? (prevch == '\r') : (true);
             break;
         case '\r':
-            log_trace(UNDERLINE BOLD "↵" FMT_CLEAR);
+            log_trace(UNDERBOLD "↵" FMT_CLEAR);
             break;
         default:
             log_trace("%c", ch);
             break;
         }
         if (nextch == '\0')
-            log_trace(UNDERLINE BOLD "[\\0]" FMT_CLEAR);
+            log_trace(UNDERBOLD "[\\0]" FMT_CLEAR);
     }
 
-    if (lc <= nlines)
+    if (lc <= nlines) {
         log_trace("\n");
+    }
     LOG_LOWER_SEPARATOR();
     log_trace("\n");
     if (show_pretty_print_guide) {
         log_trace(FMT_CLEAR);
-        LOG_SYMBOL_REPL(" ", "SPACE");
-        LOG_SYMBOL_REPL("↓", "\\n");
-        LOG_SYMBOL_REPL("↵", "\\r");
+        logSymbolReplacement(" ", "SPACE");
+        logSymbolReplacement("↓", "\\n");
+        logSymbolReplacement("↵", "\\r");
         log_trace("\n");
         show_pretty_print_guide = false;
     }

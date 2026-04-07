@@ -1,4 +1,5 @@
 #pragma once
+#include "HttpError.h"
 #include "HttpMetadata.h"
 #include "StringView.h"
 typedef enum {
@@ -12,7 +13,8 @@ typedef enum {
     HttpRequestMethod_PATCH,    // UNSAFE!!
     HttpRequestMethod_CONNECT,  // UNSAFE!!
     HttpRequestMethod__COUNT,
-    HttpRequestMethod_PARSE_ERROR,
+    HttpRequestMethod_NOT_IMPLEMENTED,
+    HttpRequestMethod_BAD_REQUEST,
 } HttpRequestMethod;
 
 static const char* HttpRequestMethod_toStr[] = {
@@ -26,7 +28,7 @@ typedef enum {
     HttpVersion_2,
     HttpVersion_3,
     HttpVersion__COUNT,
-    HttpVersion__PARSE_ERROR,
+    HttpVersion_NOT_SUPPORTED,
 } HttpVersion;
 
 static const char* HttpVersion_toStr[] = {
@@ -50,9 +52,9 @@ const static char* HttpRequestHeader_toStr[] = {
 typedef struct {
     HttpRequestMethod method;
     StringView        target_sv;
-    StringView        query_sv;
     HttpVersion       version;
     StringViewPair*   headers;
     size_t            num_headers;
-    HttpStatus        status;
+    bool              hasError;
+    HttpError         err;
 } HttpRequest;

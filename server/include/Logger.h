@@ -8,11 +8,11 @@
 #include <string.h>
 
 #include "AnsiColors.h"
-#include "CWrappers.h"
 #include "ErrnoDefs.h"
 #include "HttpMetadata.h"
 #include "HttpRequest.h"
 #include "NativeTimer.h"
+#include "cstrHelpers.h"
 
 #define OSTREAM stdout
 
@@ -63,8 +63,6 @@ static inline void log_return_internal(const char* func_str, const char* expr_st
 #endif
 
 static const char* FMT_LOGLEVEL_COLORS[] = {
-    GREEN,   // EXIT_SUCCESS
-    RED,     // EXIT_FAILURE
     CYAN,    // DEBUG
     CYAN,    // RETURN
     LIGREY,  // INFO
@@ -72,19 +70,21 @@ static const char* FMT_LOGLEVEL_COLORS[] = {
     PINK,    // WARN
     LIRED,   // ERROR
     RED,     // FATAL
+    GREEN,   // EXIT_SUCCESS
+    RED,     // EXIT_FAILURE
 };
 // clang-format off
 static const char* loglevel_tostr[] = { 
-    "DEBUG", 
-    "DEBUG-RET", 
-    "INFO",
-    "NOTICE",
-    "WARN",
-    "ERROR",
-    "FATAL",
-    "N/A",
-    "EXIT",
-    "EXIT", 
+    "[DEBUG]", 
+    "[DEBUG-RET]", 
+    " [INFO]",
+    "[NOTIF]",
+    " [WARN]",
+    "[ERROR]",
+    "[FATAL]",
+    "  [N/A]",
+    "[EXIT]",
+    "[EXIT]", 
 };
 
 typedef enum LogLevel {
@@ -106,12 +106,14 @@ static inline void log_internal(LogLevel level, const char* filename, int line, 
     if (level<LOGLEVEL){
         return;
     }
+    #ifdef LOGGER_DISABLE_TIMER
     double ms = ms_since_start();
     log_trace(FMT_CLEAR);
     log_trace("%06.3lfs ", ms / 1000.0);
+    #endif
     log_trace(FMT_LOGLEVEL_COLORS[level]);
     log_trace("%-8s", loglevel_tostr[level]);
-    if (!(level==LogLevel_FATAL)){
+    if (level!=LogLevel_FATAL){
         log_trace(FMT_CLEAR);
         log_trace(BOLD_DWHITE);
     } else{
@@ -155,34 +157,30 @@ static LogSettings log_settings;
     #error Unsupported operating system
 #endif
 
-// clang-format off
-#define X_LIST_TYPENAMES                                                       \
-    X(int, "%d", val)                                                          \
-    X(char, "'%c'", val)                                                          \
-    X(uint64_t, UINT64_T_FMT, val)                                             \
-    X(long, "%ld", val)                                                        \
-    X(double, "%lf", val)                                                      \
-    X(bool, "%s", (val ? "true" : "false"))                                    \
-    X(HttpRequest,                                                             \
-      "HttpRequest {\n"                                                        \
-      "    .method     = '%s'\n"                                                     \
-      "    .target_sv  = '%s'\n"                                                    \
-      "    .query_sv   = '%s'\n"                                                     \
-      "    .version    = '%s'\n"                                                      \
-      "    .headers    = '%s'\n"                                                      \
-      "} HttpRequest;",                                                        \
-      HttpRequestMethod_toStr[val.method],                                     \
-      sv_toStr(val.target_sv),                                                 \
-      sv_toStr(val.query_sv),                                                  \
-      HttpVersion_toStr[val.version],                                          \
+// clang-format on
+#define X_LIST_TYPENAMES                                                                           \
+    X(int, "%d", val)                                                                              \
+    X(char, "'%c'", val)                                                                           \
+    X(uint64_t, UINT64_T_FMT, val)                                                                 \
+    X(long, "%ld", val)                                                                            \
+    X(double, "%lf", val)                                                                          \
+    X(bool, "%s", (val ? "true" : "false"))                                                        \
+    X(HttpRequest,                                                                                 \
+      "HttpRequest {\n"                                                                            \
+      "    .method     = '%s'\n"                                                                   \
+      "    .target_sv  = '%s'\n"                                                                   \
+      "    .version    = '%s'\n"                                                                   \
+      "    .headers    = %s\n"                                                                     \
+      "} HttpRequest;",                                                                            \
+      HttpRequestMethod_toStr[val.method], sv_cstr(val.target_sv), HttpVersion_toStr[val.version], \
       svparr_ToStr(val.headers, val.num_headers))
 
-#define X(T, fmt, ...)                                                         \
-    static inline const char *T##_toStr(T val) {                               \
-        char *buf = calloc(BUF_SZ, sizeof(char));                                 \
-        snprintf(buf, BUF_SZ, "%s ", #T);                                         \
-        snprintf(buf, BUF_SZ, fmt, ##__VA_ARGS__);                                \
-        return buf;                                                            \
+#define X(T, fmt, ...)                                                                             \
+    static inline const char* T##_toStr(T val) {                                                   \
+        char* buf = calloc(BUF_SZ, sizeof(char));                                                  \
+        snprintf(buf, BUF_SZ, "%s ", #T);                                                          \
+        snprintf(buf, BUF_SZ, fmt, ##__VA_ARGS__);                                                 \
+        return buf;                                                                                \
     }
 
 // clang-format on
@@ -199,6 +197,8 @@ X_LIST_TYPENAMES
         double: double_toStr, \
         bool: bool_toStr, \
         HttpRequest: HttpRequest_toStr, \
+        StringView: sv_cstr, \
+        String*: str_cstr, \
         default: int_toStr)(x)
 // clang-format on
 
@@ -206,5 +206,4 @@ X_LIST_TYPENAMES
     do {                                                                                           \
         const char* str = TOSTR(x);                                                                \
         log_internal(LogLevel_INFO, __FILE_NAME__, __LINE__, "%s = %s", #x, str);                  \
-        free((void*)str);                                                                          \
     } while (0)
