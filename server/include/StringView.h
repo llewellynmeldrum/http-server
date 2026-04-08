@@ -222,10 +222,11 @@ static inline void sv_toUpper(StringView sv, const char s) {
     }
 }
 // bullshit:
-#define sv_print(sv) _SV_PRINT(#sv, sv)
-static inline const char* _SV_PRINT(const char* prefix, const StringView sv) {
+#define sv_print(sv) _SV_PRINT(#sv, sv, __FILE_NAME__, __LINE__)
+static inline const char* _SV_PRINT(const char* prefix, const StringView sv, const char* filename,
+                                    int line) {
     char* cstr = sv_cstr(sv);
-    printf("%s->[%zu]:'%s'\n", prefix, sv.len, cstr);
+    printf("[%s:%d]: len:%zu %s='%s'\n", filename, line, sv.len, prefix, cstr);
     free(cstr);
     // BUG: leak, only for debugging so should be fine
     return cstr;

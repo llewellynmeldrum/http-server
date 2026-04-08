@@ -6,7 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-int         ___global = 0;
+static int  ___global = 0;
 static char memcpy_hint[BUF_SZ] = "";
 
 #define SET_MEMCPY_HINT(hint) strncpy(memcpy_hint, #hint, BUF_SZ);

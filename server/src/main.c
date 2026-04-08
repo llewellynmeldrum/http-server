@@ -4,7 +4,6 @@
 #include <netinet/in.h>
 #include <pthread.h>
 #include <signal.h>
-#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -15,6 +14,8 @@
 #include "Globals.h"
 #include "HttpError.h"
 #include "HttpMetadata.h"
+#include "HttpParsing.h"
+#include "HttpTarget.h"
 #include "LString.h"
 #include "ServerTypes.h"
 #include "SocketWrapper.h"
@@ -40,35 +41,16 @@ static void init_responders();
 
 static void* handle_client(void* arg);
 
+static void init_static_data(void) {
+    init_percent_valmap();
+}
 u64  program_epoch_ns;
 char document_root[PATH_MAX] = {};
-
-static StringMap        percent_encoding_map = {};
-const static StringView percent_keymap[] = {
-    (StringView){ .ptr = "%20", .len = 3 }, (StringView){ .ptr = "%21", .len = 3 },
-    (StringView){ .ptr = "%23", .len = 3 }, (StringView){ .ptr = "%24", .len = 3 },
-    (StringView){ .ptr = "%25", .len = 3 }, (StringView){ .ptr = "%26", .len = 3 },
-    (StringView){ .ptr = "%27", .len = 3 }, (StringView){ .ptr = "%28", .len = 3 },
-    (StringView){ .ptr = "%29", .len = 3 }, (StringView){ .ptr = "%2A", .len = 3 },
-    (StringView){ .ptr = "%2B", .len = 3 }, (StringView){ .ptr = "%2C", .len = 3 },
-    (StringView){ .ptr = "%2F", .len = 3 }, (StringView){ .ptr = "%3A", .len = 3 },
-    (StringView){ .ptr = "%3B", .len = 3 }, (StringView){ .ptr = "%3D", .len = 3 },
-    (StringView){ .ptr = "%3F", .len = 3 }, (StringView){ .ptr = "%5B", .len = 3 },
-    (StringView){ .ptr = "%5D", .len = 3 }, (StringView){ .ptr = "%40", .len = 3 },
-
-};
-const static VAL_T percent_valmap[] = {
-    ' ', '!', '#', '$', '%', '&', '\'', '(', ')', '*',
-    '+', ',', '/', ':', ';', '=', '?',  '[', ']', '@',
-
-};
 
 int main(int argc, char** argv) {
     signal(SIGINT, handle_SIGINT);
     program_epoch_ns = get_current_ns();
-    percent_encoding_map = sm_make();
-    sm_mapArrays(&percent_encoding_map, percent_keymap, percent_valmap, 20);
-    //    sm_print(&percent_encoding_map);
+    init_static_data();
 
     handle_client((void*)0);
     exit(EXIT_SUCCESS);
@@ -112,335 +94,43 @@ void init_responders(void) {
     }
 }
 
-HttpRequestMethod match_HttpRequestMethod(const StringView sv) {
-    for (HttpRequestMethod i = 0; i < HttpRequestMethod__COUNT; i++) {
-        const char* method_str = HttpRequestMethod_toStr[i];
-        if (sv_matchesStr(sv, method_str)) {
-            return i;
-        }
-    }
-    return HttpRequestMethod_BAD_REQUEST;
-}
-
-HttpVersion match_HttpVersion(const StringView sv) {
-    for (HttpVersion i = 0; i < HttpVersion__COUNT; i++) {
-        const char* version_str = HttpVersion_toStr[i];
-        if (sv_matchesStr(sv, version_str)) {
-            return i;
-        }
-    }
-    return HttpVersion_NOT_SUPPORTED;
-}
-// RFC 9112:
-/*
-    OWS := (SP|HTAB)*
-
-    HTTP-message   = start-line CRLF
-                    (field-line CRLF)*
-                    CRLF
-                    [message-body]
-*/
-HttpRequest parse_HttpRequest(ByteStream* stream) {
-    //    bs_debugLog(stream);
-    HttpRequest res = {};
-
-    // 1. parse request line
-    // RFC 9112:
-    //  request-line   = method SP request-target SP HTTP-version CRLF
-    StringView method_sv = bs_consumeUntil(stream, SP);
-    if (method_sv.len == 0 || !bs_skipExactly(stream, SP)) {
-        goto ERR_400_BAD_REQUEST;
-    } else if (method_sv.len > MAX_METHOD_LEN) {
-        goto ERR_501_NOT_IMPLEMENTED;
-    }
-
-    StringView target_sv = bs_consumeUntil(stream, SP);
-    if (target_sv.len == 0 || !bs_skipExactly(stream, SP)) {
-        goto ERR_400_BAD_REQUEST;
-    } else if (target_sv.len > MAX_TARGET_STRLEN) {
-        goto ERR_414_URI_TOO_LONG;
-    }
-
-    StringView version_sv = bs_consumeUntil(stream, CRLF);
-    if (version_sv.len == 0 || !bs_skipExactly(stream, CRLF)) {
-        goto ERR_400_BAD_REQUEST;
-    }
-
-    // 2. Parse field lines
-    // RFC 9112:
-    // field-line   = field-name ":" OWS field-value OWS
-    // OWS = optional whitespace, i.e 0 or more SP|HTAB
-
-    StringViewPair headers[MAX_HEADER_COUNT] = {};
-    while (res.num_headers < MAX_HEADER_COUNT) {
-        if (sv_equal(bs_lookahead(stream, 2), CRLF)) {
-            break;
-        }
-        StringView field_name = bs_consumeUntil(stream, COLON);
-        if (field_name.len == 0 || !bs_skipExactly(stream, COLON)) {
-            goto ERR_400_BAD_REQUEST;
-        }
-        StringView field_value = bs_consumeUntil(stream, CRLF);
-        field_value = sv_strip(field_value, OWS);
-        sv_print(field_value);
-        headers[res.num_headers++] = svp_make(field_name, field_value);
-        (void)bs_consumeN(stream, 2);  // skip 'CRLF'
-    }
-    if (res.num_headers >= 1) {
-        res.headers = calloc(res.num_headers, sizeof(StringViewPair));
-        memcpy(res.headers, headers, res.num_headers * sizeof(StringViewPair));
-    } else {
-        res.headers = nullptr;
-    }
-    res.method = match_HttpRequestMethod(method_sv);
-    if (res.method == HttpRequestMethod_BAD_REQUEST) {
-        goto ERR_400_BAD_REQUEST;
-    } else if (res.method >= HttpRequestMethod_OPTIONS) {
-        goto ERR_501_NOT_IMPLEMENTED;
-    }
-    res.target_sv = target_sv;
-    res.version = match_HttpVersion(version_sv);
-    if (res.version != HttpVersion_1_1) {
-        goto ERR_505_HTTP_VERSION_NOT_SUPPORTED;
-    }
-    LOG_DEBUG("Parsed http request:");
-    // LOG_EXPR(res);
-    return res;
-
-// [RFC 9110]:
-// *'A server can send a 505 (HTTP Version Not Supported) response if it wishes, for any reason, to
-// refuse service of the client's major protocol version'*
-ERR_505_HTTP_VERSION_NOT_SUPPORTED:
-    SET_ERROR(res, HTTP_VERSION_NOT_SUPPORTED);
-    return res;
-
-// [RFC 9112]:
-// *'When a [HTTP] server (...) receives a sequence of octets that does not match
-// the HTTP-message grammar (...) the server SHOULD respond with a 400'*
-ERR_400_BAD_REQUEST:
-    SET_ERROR(res, BAD_REQUEST);
-    return res;
-
-// [RFC 9112]:
-// *'A server that receives a request-target longer than any URI it wishes to parse MUST
-// respond with a 414'*
-ERR_414_URI_TOO_LONG:
-    SET_ERROR(res, URI_TOO_LONG);
-    return res;
-
-// [RFC 9112]:
-// *'A server that receives a method longer than any that it implements
-// SHOULD respond with a 501'*
-// [RFC 9110]:
-// *'The 501 (Not Implemented) status code indicates that the server does not support the
-// functionality required to fulfill the request. This is the appropriate response when the server
-// does not recognize the request method and is not capable of supporting it for any resource'*
-ERR_501_NOT_IMPLEMENTED:
-    SET_ERROR(res, NOT_IMPLEMENTED);
-    return res;
-}
-
-typedef struct {
-    FILE*     fptr;
-    String    resolved_path;
+struct HttpResponse {
+    FILE*  fptr;
+    String resolved_path;
+    // requires the fields of a http response, like the status code, and other response line
+    // details.
+    //
     bool      hasError;
     HttpError err;
-} HttpResource;
+};
+typedef struct HttpResponse HttpResponse;
 
-String resolve_absoluteForm(StringView raw_target) {
-    // if matches http://lmeldrum.dev ->
-    assert(sv_hasPrefixStr(raw_target, "http://"));
-    const size_t domain_name_start = 7;  // http://<X>
-    StringView   no_scheme = sv_trimLeft(raw_target, domain_name_start);
-
-    const size_t first_slash = sv_find(no_scheme, '/');
-    no_scheme = sv_trimRight(raw_target, first_slash);
-
-    if (!sv_matchesStr(no_scheme, "lmeldrum.dev")) {
-        return NULL_STRING;
-    }
-    StringView path = sv_trimLeft(no_scheme, first_slash);  // https://lmeldrum.dev/<X>
-
-    const size_t first_question_mark = sv_find(no_scheme, '?');
-    path = sv_trimRight(path, first_question_mark);                 // .../<path>[?query]
-    StringView query = sv_trimLeft(path, first_question_mark + 1);  // ...?<query>
-    (void)query;
-
-    String res = str_make(path);
-    // we now have the path, so resolve it.
-    return res;
+HttpResponse generate_HttpResponse(HttpTarget target) {
+    // given some resource (which is essentially a resolved file path on the servers machine),
+    // 0. first check to see if there is already an error -> if so, generate the matching response.
+    // 1. check to make sure the requested file exists -> if not, resopnse=404.
+    // 2. check to make sure the file is accessible(?) -> if not, response=403
+    // 3. check to make sure the file is of a reasonable size
+    // 4. if all the checks pass, generate the structured HttpResponse, which will contain the
+    // status code, etc, everything needed to serialize the resultant response line, headers, and
+    // body.
+    return (HttpResponse){};
 }
 
-String resolve_originForm(StringView raw_target) {
-    const size_t first_question_mark = sv_find(raw_target, '?');
-
-    LOG_EXPR(raw_target);
-    LOG_EXPR(first_question_mark);
-    StringView path = sv_trimRight(raw_target, first_question_mark);      // .../<path>[?query]
-    StringView query = sv_trimLeft(raw_target, first_question_mark + 1);  // ...?<query>
-    LOG_EXPR(path);
-    LOG_EXPR(query);
-    (void)query;
-    return str_make(path);
+// fat pointer style array
+struct ByteArray {
+    Byte*  ptr;
+    size_t len;
+};
+typedef struct ByteArray ByteArray;
+ByteArray                serialize_HttpResponse(HttpResponse response) {
+    // given some response, serialize its fields.
+    // Return a heap allocated byte array,
+    return (ByteArray){};
 }
-
-HttpResource resolve_HttpResource(String target) {
-    // given some normalized path
-    return (HttpResource){};
-}
-
-String decode_percentEscapes(String path) {
-    // TODO: path here could be a stringview.
-    const size_t lookahead_dist = 2;
-    String       res = str_make_empty();
-    for (size_t i = 0; i < path.len; i++) {
-        if (i < path.len - lookahead_dist && str_at(&path, i) == '%') {
-            StringView slice = str_slice(&path, i, i + lookahead_dist);
-            if (sm_contains(&percent_encoding_map, slice)) {
-                const char repl = sm_find(&percent_encoding_map, slice);
-                str_append_ch(&res, repl);
-                i += lookahead_dist;  // skip the chars
-                continue;
-            }
-        } else {
-            str_append_ch(&res, str_at(&path, i));
-            //            LOG_DEBUG("res:%s", str_cstr(&res));
-        }
-    }
-    LOG_EXPR(&res);
-    return res;
-}
-String decode_upwardPathing(String path) {
-    // /hello/world
-    // given a string of paths /.../.../...
-    // 1. split into /<chunk>/ separated chunks
-    size_t      num_segments = 0;
-    StringView* path_segments = str_splitOnEach(&path, '/', &num_segments);
-    // BUG: questionable buf size
-    StringView* stack[BUF_SZ] = {};
-    size_t      rsp = 0;
-    LOG_EXPR(num_segments);
-    for (size_t i = 0; i < num_segments; i++) {
-        //        LOG_EXPR(path_segments[i]);
-        if (sv_equal(path_segments[i], EMPTY) || sv_equal(path_segments[i], DOT)) {
-            continue;
-        } else if (sv_equal(path_segments[i], DOTDOT)) {
-            if (rsp <= 0) {
-                return NULL_STRING;  // stack is empty, tried to escape docroot
-            } else {
-                rsp--;
-                //          LOG_DEBUG("POP:");
-                //         LOG_EXPR(path_segments[i]);
-            }
-        } else {
-            //    LOG_DEBUG("PUSH:");
-            //   LOG_EXPR(path_segments[i]);
-            stack[rsp++] = &path_segments[i];
-        }
-    }
-
-    String res = str_make_empty();
-    for (size_t i = 0; i < rsp; i++) {
-        str_append_sv(&res, FSLASH);
-        str_append_sv(&res, *stack[i]);
-    }
-    // 2. for each, push.
-    // 3. pop off a dir if '..', if st_empty, return err.
-    // possible forms: /    /foo.c
-    return res;
-}
-String normalize_Path(String path) {
-    String no_percents = decode_percentEscapes(path);
-    LOG_EXPR(&no_percents);
-    String no_dots = decode_upwardPathing(no_percents);
-    LOG_EXPR(&no_dots);
-    if (no_dots.isNull) {
-        LOG_FATAL("Path (%s) escapes docroot!", str_cstr(&no_percents));
-    }
-    if (no_dots.len == 0) {
-        str_append_ch(&no_dots, '/');
-    }
-    if (str_last(&no_dots) == '/') {
-        str_append_sv(&no_dots, INDEX_HTML);
-    }
-    return no_dots;
-}
-
-String resolve_HttpTarget(StringView raw_target) {
-    //    find out if absolute_form or origin_form;
-    typedef enum {
-        HttpResourceType_ABSOLUTE,
-        HttpResourceType_ORIGIN,
-        HttpResourceType_BAD_FORM,
-    } HttpResourceType;
-    HttpResourceType req_type;
-    if (sv_hasPrefixStr(raw_target, "http://")) {
-        req_type = HttpResourceType_ABSOLUTE;
-    } else if (sv_at(raw_target, 0) == '/') {
-        req_type = HttpResourceType_ORIGIN;
-    } else {
-        req_type = HttpResourceType_BAD_FORM;
-    }
-
-    switch (req_type) {
-    case HttpResourceType_ABSOLUTE:
-        return resolve_absoluteForm(raw_target);
-        break;
-    case HttpResourceType_ORIGIN:
-        return resolve_originForm(raw_target);
-        break;
-    case HttpResourceType_BAD_FORM:
-        return NULL_STRING;
-        break;
-    }
-}
-HttpResource resolve_HttpRequest(HttpRequest request) {
-    HttpResource res = {};
-    if (request.hasError) {
-        res.resolved_path = NULL_STRING;
-        res.fptr = nullptr;
-        res.hasError = true;
-        res.err = request.err;
-        // pass the error forward
-        return res;
-    }
-
-    String target = resolve_HttpTarget(request.target_sv);
-    if (str_equal(&target, &NULL_STRING)) {
-        goto ERR_501_NOT_IMPLEMENTED;
-    }
-    String normalized_path = normalize_Path(target);
-    if (str_equal(&target, &NULL_STRING)) {
-    }
-    LOG_EXPR(&normalized_path);
-    str_prepend_sv(&normalized_path, DOCROOT);
-    LOG_EXPR(&normalized_path);
-    char  buf[PATH_MAX];
-    char* normalized_cstr = str_cstr_buf(&normalized_path, buf);
-    char* resolved_path_cstr = realpath(normalized_cstr, nullptr);
-    if (!resolved_path_cstr) {
-        goto ERR_404_NOT_FOUND;
-    }
-    String resolved_path = str_make_cstr(resolved_path_cstr);
-    if (!str_hasPrefix(&resolved_path, RESOLVED_DOCROOT)) {
-        goto ERR_403_FORBIDDEN;
-    }
-
-    //    StringView HttpResource = resolve_HttpResource(normalized_path);
-    return res;
-ERR_501_NOT_IMPLEMENTED:
-    SET_ERROR(res, NOT_IMPLEMENTED);
-    return res;
-
-ERR_403_FORBIDDEN:
-    SET_ERROR(res, FORBIDDEN);
-    return res;
-ERR_404_NOT_FOUND:
-    SET_ERROR(res, NOT_FOUND);
-    return res;
-}
-
-void* handle_client(void* arg) {
+void       init_percent_valmap(void);
+HttpTarget resolve_HttpRequest(HttpRequest request);
+void*      handle_client(void* arg) {
     // request-target = origin-form
     //
     Byte test_get_header_buf[] = "GET /?idkthisisaquery HTTP/1.1\r\n"
@@ -449,32 +139,26 @@ void* handle_client(void* arg) {
                                  "Accept: */*\r\n"
                                  "\r\n";
 
-    //    Byte test_get_header_buf[] = "GET /abc%2C%2A%2B/def/idgaf?idkthisisaquery HTTP/1.1\r\n"
-    //                                 "Host: example.com\r\n"
-    //                                 "User-Agent: curl/8.6.0\r\n"
-    //                                 "Accept: */*\r\n"
-    //                                 "\r\n";
-
     int n_bytes_received = arrlen(test_get_header_buf);
     LOG_INFO("Recieved %zuB from client.", n_bytes_received);
 
-    ByteStream   stream = bs_make(test_get_header_buf, n_bytes_received);
-    HttpRequest  request = parse_HttpRequest(&stream);
-    HttpResource resource = resolve_HttpRequest(request);
-    // TODO: implement
-    //    HttpResponse response = genereate_HttpResponse(resource);
+    ByteStream  stream = bs_make(test_get_header_buf, n_bytes_received);
+    HttpRequest request = parse_HttpRequest(&stream);
+    HttpTarget  target = resolve_HttpRequest(request);
+    // TODO: implement V
+    HttpResponse response = generate_HttpResponse(target);
+    // TODO: implement V
+    ByteArray outgoing_data = serialize_HttpResponse(response);
 
+    // TODO: Refactor some of the header only mess ive got going on.
+    //       Move each stage to a separate module (.c/.h pair)
     /*
      * INTENDED ORDER:
     HttpRequest  request  = parse_HttpRequest(&stream);
-    HttpResource resource = resolveRequest(http_request);
+    HttpTarget resource = resolveRequest(http_request);
     HttpResponse response = generateResponse(resource);
     Byte*        outgoing_data = encodeResponse(response);
-        // HttpRequest ->  request_...()
-        // HttpResource -> resource_...()
-        // HttpResponse -> response_...()
     */
-
     return nullptr;
 }
 
@@ -484,6 +168,7 @@ void handle_SIGINT(int sig) {
     int opt = 1;
     setsockopt(config.server_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
     LOG_EXIT(EXIT_SUCCESS);
+    exit(EXIT_SUCCESS);
 }
 
 void init_config(int argc, char** argv) {
