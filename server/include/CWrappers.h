@@ -6,10 +6,9 @@
 #include <stdlib.h>
 #include <string.h>
 
+// #define ENABLE_MEMCPY_DEBUG
 static int  ___global = 0;
 static char memcpy_hint[BUF_SZ] = "";
-
-#define SET_MEMCPY_HINT(hint) strncpy(memcpy_hint, #hint, BUF_SZ);
 
 static inline char* ptr_details(const void* ptr, int count, const char* hint) {
     int           stack = 0;
@@ -43,6 +42,8 @@ static inline char* ptr_details(const void* ptr, int count, const char* hint) {
     strcpy(res, buf);
     return res;
 }
+#define SET_MEMCPY_HINT(hint) strncpy(memcpy_hint, #hint, BUF_SZ);
+#ifdef ENABLE_MEMCPY_DEBUG
 #undef memcpy
 static inline void logged_memcpy(void* dest, const void* src, size_t count, const char* filename,
                                  size_t line, const char* hint) {
@@ -58,4 +59,4 @@ static inline void logged_memcpy(void* dest, const void* src, size_t count, cons
     logged_memcpy(dest, src, count, __FILE_NAME__, __LINE__, memcpy_hint)
 // the classic. Some more sophisticated folk might like the __builtin_types_compatible_p
 // variant, which ensures this is not used on pointers, but my setup of clangd yells at me enough.
-#define arrlen(x) (sizeof(x) / sizeof(x[0]))
+#endif

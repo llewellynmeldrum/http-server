@@ -23,6 +23,7 @@
 #include "StringView.h"
 
 #include "HttpRequest.h"
+#include "macromagic.h"
 
 pthread_t                 client_handler_thread;
 static const unsigned int HTTP_TCP_PORT = 80;
@@ -95,17 +96,30 @@ void init_responders(void) {
 }
 
 struct HttpResponse {
-    FILE*  fptr;
-    String resolved_path;
-    // requires the fields of a http response, like the status code, and other response line
-    // details.
-    //
-    bool      hasError;
-    HttpError err;
+    const HttpVersion version;
+
+    String      resource_path;
+    HttpStatus  status;
+    HttpHeader* headers;
+    size_t      header_count;
+    FILE*       resource_fptr;
 };
 typedef struct HttpResponse HttpResponse;
 
 HttpResponse generate_HttpResponse(HttpTarget target) {
+    HttpResponse res = {
+        .version = HttpVersion_1_1,
+        .resource_path = target.resolved_path,
+    };
+    if (target.hasError) {
+        // translate the error to the correct HttpResponse encoding
+        // could LOG_ERROR(err.info)
+        res.status = target.err.code;
+        res.headers = nullptr;
+        res.header_count = 0;
+        res.resource_fptr = nullptr;
+        return res;
+    }
     // given some resource (which is essentially a resolved file path on the servers machine),
     // 0. first check to see if there is already an error -> if so, generate the matching response.
     // 1. check to make sure the requested file exists -> if not, resopnse=404.
@@ -130,25 +144,54 @@ ByteArray                serialize_HttpResponse(HttpResponse response) {
 }
 void       init_percent_valmap(void);
 HttpTarget resolve_HttpRequest(HttpRequest request);
-void*      handle_client(void* arg) {
-    // request-target = origin-form
-    //
-    Byte test_get_header_buf[] = "GET /?idkthisisaquery HTTP/1.1\r\n"
-                                 "Host: example.com\r\n"
-                                 "User-Agent: curl/8.6.0\r\n"
-                                 "Accept: */*\r\n"
-                                 "\r\n";
 
-    int n_bytes_received = arrlen(test_get_header_buf);
-    LOG_INFO("Recieved %zuB from client.", n_bytes_received);
-
-    ByteStream  stream = bs_make(test_get_header_buf, n_bytes_received);
+#define TEST_HTTP_REQUEST(data) _TEST_HTTP_REQUEST(#data, data, arrlen(data))
+ByteArray _TEST_HTTP_REQUEST(const char* name, Byte* buf, int buf_len) {
+    LOG_INFO("TEST(%s) -> %zuB:", name, buf_len);
+    ByteStream  stream = bs_make(buf, buf_len);
     HttpRequest request = parse_HttpRequest(&stream);
     HttpTarget  target = resolve_HttpRequest(request);
     // TODO: implement V
     HttpResponse response = generate_HttpResponse(target);
     // TODO: implement V
     ByteArray outgoing_data = serialize_HttpResponse(response);
+    printf("\n");
+    return outgoing_data;
+}
+void* handle_client(void* arg) {
+
+    Byte origin_GET[] = "GET /?idkthisisaquery HTTP/1.1\r\n"
+                        "Host: example.com\r\n"
+                        "User-Agent: curl/8.6.0\r\n"
+                        "Accept: */*\r\n"
+                        "\r\n";
+    Byte absolute_GET[] = "GET http://lmeldrum.dev/pathway/remove_me/../ HTTP/1.1\r\n"
+                          "Host: example.com\r\n"
+                          "User-Agent: curl/8.6.0\r\n"
+                          "Accept: */*\r\n"
+                          "\r\n";
+    Byte absolute_GET_BAD_HOST[] = "GET http://google.com/pathway/remove_me/../ HTTP/1.1\r\n"
+                                   "Host: google.com\r\n"
+                                   "User-Agent: curl/8.6.0\r\n"
+                                   "Accept: */*\r\n"
+                                   "\r\n";
+
+    Byte origin_GET_ESCAPE_DOCROOT[] = "GET /test/test/test/../../../../ HTTP/1.1\r\n"
+                                       "Host: example.com\r\n"
+                                       "User-Agent: curl/8.6.0\r\n"
+                                       "Accept: */*\r\n"
+                                       "\r\n";
+    Byte absolute_GET_ESCAPE_DOCROOT[] =
+        "GET http://lmeldrum.dev/dir1/dir2/../dir2/../../../ HTTP/1.1\r\n"
+        "Host: example.com\r\n"
+        "User-Agent: curl/8.6.0\r\n"
+        "Accept: */*\r\n"
+        "\r\n";
+    TEST_HTTP_REQUEST(origin_GET);
+    TEST_HTTP_REQUEST(absolute_GET);
+    TEST_HTTP_REQUEST(absolute_GET_BAD_HOST);
+    TEST_HTTP_REQUEST(origin_GET_ESCAPE_DOCROOT);
+    TEST_HTTP_REQUEST(absolute_GET_ESCAPE_DOCROOT);
 
     // TODO: Refactor some of the header only mess ive got going on.
     //       Move each stage to a separate module (.c/.h pair)

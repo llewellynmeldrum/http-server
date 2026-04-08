@@ -1,4 +1,5 @@
 #pragma once
+#include <assert.h>
 #include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -16,18 +17,29 @@ struct StringView {
 // **NON OWNING**, length-based string class.
 typedef struct StringView StringView;
 
-struct StringViewPair {
-    StringView l;
-    StringView r;
-};
-
 static const StringView NULL_STRINGVIEW = {
     .len = 0,
     .ptr = nullptr,
 };
 
-typedef struct StringViewPair StringViewPair;
-
+static inline char* sv_cstr(const StringView sv) {
+    if (sv.len == 0) {
+        return "";
+    }
+    char* cstr = calloc(sv.len + 1, 1);
+    snprintf(cstr, sv.len + 1, "%s", sv.ptr);
+    //    print_buffer_verbose("StringView", sv.ptr, sv.len, 0);
+    // BUG: leak, only for debugging so should be fine
+    return cstr;
+}
+#define sv_print(sv) _SV_PRINT(#sv, sv, __FILE_NAME__, __LINE__)
+static inline const char* _SV_PRINT(const char* prefix, const StringView sv, const char* filename,
+                                    int line) {
+    char* cstr = sv_cstr(sv);
+    printf("[%s:%d]: len:%zu %s='%s'\n", filename, line, sv.len, prefix, cstr);
+    // BUG: leak, only for debugging so should be fine
+    return cstr;
+}
 static const StringView CR = { "\r", 1 };
 static const StringView LF = { "\n", 1 };
 static const StringView SP = { " ", 1 };
@@ -52,20 +64,15 @@ static const StringView OWS = { " \t", 2, false };
 
 static const StringView COLON = { ":", 1, false };
 
-static inline char* sv_cstr(const StringView sv) {
-    if (sv.len == 0) {
-        return "";
-    }
-    char* cstr = calloc(sv.len + 1, 1);
-    snprintf(cstr, sv.len + 1, "%s", sv.ptr);
-    //    print_buffer_verbose("StringView", sv.ptr, sv.len, 0);
-    // BUG: leak, only for debugging so should be fine
-    return cstr;
-}
-static inline StringViewPair svp_make(StringView l, StringView r) {
-    return (StringViewPair){
-        .l = l,
-        .r = r,
+struct HttpHeader {
+    StringView name;
+    StringView value;
+};
+typedef struct HttpHeader HttpHeader;
+static inline HttpHeader  header_make(StringView l, StringView r) {
+    return (HttpHeader){
+        .name = l,
+        .value = r,
     };
 }
 static inline StringView sv_make(char* cstr) {
@@ -152,30 +159,17 @@ static inline StringView sv_copy(const StringView self, Byte* copybuf) {
     };
     return copy;
 }
-static inline size_t sv_find(const StringView self, const char ch) {
+static constexpr size_t SV_NOT_FOUND = (size_t)0 - 1;
+static inline size_t    sv_find(const StringView self, const char ch) {
+    assert(self.len > 0);
+    sv_print(self);
     for (int i = 0; i < self.len; i++) {
-        if (self.ptr[i] == ch)
+        if (self.ptr[i] == ch) {
             return i;
+            fprintf(stderr, "FOUND!! %d", i);
+        }
     }
-    return self.len;
-}
-static inline StringViewPair sv_split(StringView self, size_t delim_offset) {
-    // 7:'defg' -> 2 -> 4:'defg'
-    StringView lhs = self;
-    StringView rhs = self;
-
-    lhs.len = delim_offset;
-
-    rhs.ptr += delim_offset + 1;
-    rhs.len = self.len - (delim_offset + 1);
-
-    return (StringViewPair){
-        .l = lhs,
-        .r = rhs,
-    };
-}
-static inline StringViewPair sv_splitOn(StringView self, char delim) {
-    return sv_split(self, sv_find(self, delim));
+    return SV_NOT_FOUND;
 }
 static inline bool sv_contains(const StringView self, const char ch) {
     //    printf("(%zu)'%s' does not contain '%c'\n", sv.len, sv_toStr(sv), ch);
@@ -222,35 +216,3 @@ static inline void sv_toUpper(StringView sv, const char s) {
     }
 }
 // bullshit:
-#define sv_print(sv) _SV_PRINT(#sv, sv, __FILE_NAME__, __LINE__)
-static inline const char* _SV_PRINT(const char* prefix, const StringView sv, const char* filename,
-                                    int line) {
-    char* cstr = sv_cstr(sv);
-    printf("[%s:%d]: len:%zu %s='%s'\n", filename, line, sv.len, prefix, cstr);
-    free(cstr);
-    // BUG: leak, only for debugging so should be fine
-    return cstr;
-}
-
-static inline const char* svp_toStr(const StringViewPair svp) {
-    char* cstr = calloc(BUF_SZ, 1);
-    snprintf(cstr, BUF_SZ, "(%s)=(%s)", sv_cstr(svp.l), sv_cstr(svp.r));
-    return cstr;
-}
-
-static inline const char* svparr_ToStr(const StringViewPair* svparr, size_t sz) {
-    size_t total_len = {};
-    for (size_t i = 0; i < sz; i++) {
-        total_len += svparr[i].l.len + 7 + svparr[i].r.len;
-        // {[<>,<>],\n}
-    }
-    char* cstr = calloc(total_len, 1);
-    strncat(cstr, "{\n", total_len);
-    for (size_t i = 0; i < sz; i++) {
-        char buf[BUF_SZ] = {};
-        snprintf(buf, total_len, "\t\t[%zu]:%s\n", i, svp_toStr(svparr[i]));
-        strncat(cstr, buf, total_len);
-    }
-    strncat(cstr, "\t}", total_len);
-    return cstr;
-}

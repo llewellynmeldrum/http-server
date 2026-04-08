@@ -226,7 +226,7 @@ static inline bool str_hasPrefix(String* self, const StringView prefix) {
 static inline StringView* str_splitOnEach(String* self, const char delim, size_t* OP_count) {
     // for each instance of delim, split
     // special case: start=end, no entry.
-    LOG_EXPR(self);
+    //    LOG_EXPR(self);
     size_t     start = 0;
     size_t     end = 0;
     StringView buf[BUF_SZ];
@@ -240,6 +240,9 @@ static inline StringView* str_splitOnEach(String* self, const char delim, size_t
     StringView* res = calloc(count, sizeof(StringView));
     memcpy(res, buf, sizeof(StringView) * count);
     return res;
+}
+static inline void str_print(String* self) {
+    printf("%.*s\n", (int)self->len, str_ptr(self));
 }
 static inline bool str_prepend_sv(String* self, const StringView sv) {
     str_reserve(self, self->len + sv.len);

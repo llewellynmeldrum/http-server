@@ -41,7 +41,7 @@ HttpRequest parse_HttpRequest(ByteStream* stream) {
     // field-line   = field-name ":" OWS field-value OWS
     // OWS = optional whitespace, i.e 0 or more SP|HTAB
 
-    StringViewPair headers[MAX_HEADER_COUNT] = {};
+    HttpHeader headers[MAX_HEADER_COUNT] = {};
     while (res.num_headers < MAX_HEADER_COUNT) {
         if (sv_equal(bs_lookahead(stream, 2), CRLF)) {
             break;
@@ -53,12 +53,12 @@ HttpRequest parse_HttpRequest(ByteStream* stream) {
         StringView field_value = bs_consumeUntil(stream, CRLF);
         field_value = sv_strip(field_value, OWS);
         //        sv_print(field_value);
-        headers[res.num_headers++] = svp_make(field_name, field_value);
+        headers[res.num_headers++] = header_make(field_name, field_value);
         (void)bs_consumeN(stream, 2);  // skip 'CRLF'
     }
     if (res.num_headers >= 1) {
-        res.headers = calloc(res.num_headers, sizeof(StringViewPair));
-        memcpy(res.headers, headers, res.num_headers * sizeof(StringViewPair));
+        res.headers = calloc(res.num_headers, sizeof(HttpHeader));
+        memcpy(res.headers, headers, res.num_headers * sizeof(HttpHeader));
     } else {
         res.headers = nullptr;
     }

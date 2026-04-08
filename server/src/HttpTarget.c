@@ -20,7 +20,7 @@ const static VAL_T percent_valmap[] = {
     '+', ',', '/', ':', ';', '=', '?',  '[', ']', '@',
 
 };
-static String resolve_HttpTarget(StringView raw_target);
+static String resolve_TargetPath(StringView raw_target);
 static String resolve_absoluteForm(StringView raw_target);
 static String normalize_Path(String path);
 
@@ -34,19 +34,23 @@ HttpTarget resolve_HttpRequest(HttpRequest request) {
         return res;
     }
 
-    String target = resolve_HttpTarget(request.target_sv);
-    if (str_equal(&target, &NULL_STRING)) {
+    String path = resolve_TargetPath(request.target_sv);
+    if (str_equal(&path, &NULL_STRING)) {
         goto ERR_501_NOT_IMPLEMENTED;
     }
-    String normalized_path = normalize_Path(target);
-    if (str_equal(&target, &NULL_STRING)) {
+    String normalized_path = normalize_Path(path);
+    if (str_equal(&path, &NULL_STRING)) {
         // escapes docroot?
         // TODO: handle error
+        goto ERR_403_FORBIDDEN;
     }
 
-    LOG_EXPR(&normalized_path);
+    //    LOG_EXPR(&normalized_path);
     str_prepend_sv(&normalized_path, DOCROOT);
-    LOG_EXPR(&normalized_path);
+    {
+        String* resolved_path = &normalized_path;
+        LOG_EXPR(resolved_path);
+    }
     char  buf[PATH_MAX];
     char* normalized_cstr = str_cstr_buf(&normalized_path, buf);
     char* resolved_path_cstr = realpath(normalized_cstr, nullptr);
@@ -72,40 +76,41 @@ ERR_404_NOT_FOUND:
     return res;
 }
 
+static StringView remove_QueryIfPresent(StringView path) {
+    const size_t first_question_mark = sv_find(path, '?');
+    LOG_EXPR(first_question_mark);
+    LOG_EXPR(path);
+    if (first_question_mark != SV_NOT_FOUND) {
+        //    LOG_EXPR(first_question_mark);
+        path = sv_trimRight(path, first_question_mark);
+    }
+    return path;
+}
 static String resolve_absoluteForm(StringView raw_target) {
-    assert(sv_hasPrefixStr(raw_target, "http://"));
-    const size_t domain_name_start = 7;  // http://<X>
-    StringView   no_scheme = sv_trimLeft(raw_target, domain_name_start);
+    LOG_DEBUG("Resolving absolute form for target:");
+    LOG_EXPR(raw_target);
+    assert(sv_hasPrefixStr(raw_target, "http://"));  // FIX: bad error handling
+
+    constexpr size_t domain_name_start = 7;  // http://<X>
+    StringView       no_scheme = sv_trimLeft(raw_target, domain_name_start);
 
     const size_t first_slash = sv_find(no_scheme, '/');
-    no_scheme = sv_trimRight(raw_target, first_slash);
+    StringView   scheme = sv_trimRight(no_scheme, first_slash);
 
-    if (!sv_matchesStr(no_scheme, "lmeldrum.dev")) {
+    if (!sv_matchesStr(scheme, "lmeldrum.dev")) {
+        LOG_ERROR("Cannot resolve target '%s'", sv_cstr(no_scheme));
         return NULL_STRING;
     }
     StringView path = sv_trimLeft(no_scheme, first_slash);  // https://lmeldrum.dev/<X>
-
-    const size_t first_question_mark = sv_find(no_scheme, '?');
-    path = sv_trimRight(path, first_question_mark);                 // .../<path>[?query]
-    StringView query = sv_trimLeft(path, first_question_mark + 1);  // ...?<query>
-    (void)query;
-
+    path = remove_QueryIfPresent(path);
     String res = str_make(path);
     // we now have the path, so resolve it.
     return res;
 }
 
 static String resolve_originForm(StringView raw_target) {
-    const size_t first_question_mark = sv_find(raw_target, '?');
-
-    LOG_EXPR(raw_target);
-    LOG_EXPR(first_question_mark);
-    StringView path = sv_trimRight(raw_target, first_question_mark);      // .../<path>[?query]
-    StringView query = sv_trimLeft(raw_target, first_question_mark + 1);  // ...?<query>
-    LOG_EXPR(path);
-    LOG_EXPR(query);
-    (void)query;
-    return str_make(path);
+    raw_target = remove_QueryIfPresent(raw_target);
+    return str_make(raw_target);
 }
 
 static String decode_percentEscapes(String path) {
@@ -126,7 +131,7 @@ static String decode_percentEscapes(String path) {
             //            LOG_DEBUG("res:%s", str_cstr(&res));
         }
     }
-    LOG_EXPR(&res);
+    //    LOG_EXPR(&res);
     return res;
 }
 
@@ -138,13 +143,12 @@ String decode_upwardPathing(String path) {
     StringView* path_segments = str_splitOnEach(&path, '/', &num_segments);
     // BUG: questionable buf size
 
-    // Stack based approach, push path segments, pop if '..'. If we reach an empty stack, we have
-    // tried to escape docroot
-    // I realise that this is all kind of unnecessary because realpath() does this anyway.
-    // But whatever.
+    // Stack based approach, push path segments, pop if '..'. If we reach an empty stack, we
+    // have tried to escape docroot I realise that this is all kind of unnecessary because
+    // realpath() does this anyway. But whatever.
     StringView* stack[BUF_SZ] = {};
     size_t      st_top = 0;
-    LOG_EXPR(num_segments);
+    //    LOG_EXPR(num_segments);
     for (size_t i = 0; i < num_segments; i++) {
         //        LOG_EXPR(path_segments[i]);
         if (sv_equal(path_segments[i], EMPTY) || sv_equal(path_segments[i], DOT)) {
@@ -173,9 +177,9 @@ String decode_upwardPathing(String path) {
 }
 static String normalize_Path(String path) {
     String no_percents = decode_percentEscapes(path);
-    LOG_EXPR(&no_percents);
+    //   LOG_EXPR(&no_percents);
     String no_dots = decode_upwardPathing(no_percents);
-    LOG_EXPR(&no_dots);
+    //    LOG_EXPR(&no_dots);
     if (no_dots.isNull) {
         LOG_FATAL("Path (%s) escapes docroot!", str_cstr(&no_percents));
     }
@@ -188,7 +192,7 @@ static String normalize_Path(String path) {
     return no_dots;
 }
 
-static String resolve_HttpTarget(StringView raw_target) {
+static String resolve_TargetPath(StringView raw_target) {
     //    find out if absolute_form or origin_form;
     typedef enum {
         HttpTargetType_ABSOLUTE,
@@ -206,12 +210,15 @@ static String resolve_HttpTarget(StringView raw_target) {
 
     switch (req_type) {
     case HttpTargetType_ABSOLUTE:
+        LOG_DEBUG("Absolute form detected.");
         return resolve_absoluteForm(raw_target);
         break;
     case HttpTargetType_ORIGIN:
+        LOG_DEBUG("Origin form detected.");
         return resolve_originForm(raw_target);
         break;
     case HttpTargetType_BAD_FORM:
+        LOG_DEBUG("BAD form detected.");
         return NULL_STRING;
         break;
     }

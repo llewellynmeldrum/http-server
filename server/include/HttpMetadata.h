@@ -1,7 +1,7 @@
 #pragma once
 // clang-format off
     #define SET_ERROR(res, status)\
-    LOG_ERROR("%s",#status);\
+    LOG_ERROR("%d %s",HttpStatus_##status,#status);\
     res.hasError=true;\
     res.err = (HttpError){\
         .code = HttpStatus_##status,\

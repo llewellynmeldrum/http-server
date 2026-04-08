@@ -9,6 +9,7 @@
 
 #include "AnsiColors.h"
 #include "ErrnoDefs.h"
+#include "HttpHeader.h"
 #include "HttpMetadata.h"
 #include "HttpRequest.h"
 #include "NativeTimer.h"
@@ -173,7 +174,7 @@ static LogSettings log_settings;
       "    .headers    = %s\n"                                                                     \
       "} HttpRequest;",                                                                            \
       HttpRequestMethod_toStr[val.method], sv_cstr(val.target_sv), HttpVersion_toStr[val.version], \
-      svparr_ToStr(val.headers, val.num_headers))
+      header_array_ToStr(val.headers, val.num_headers))
 
 #define X(T, fmt, ...)                                                                             \
     static inline const char* T##_toStr(T val) {                                                   \

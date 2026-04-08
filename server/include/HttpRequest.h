@@ -53,7 +53,7 @@ typedef struct {
     HttpRequestMethod method;
     StringView        target_sv;
     HttpVersion       version;
-    StringViewPair*   headers;
+    HttpHeader*       headers;
     size_t            num_headers;
     bool              hasError;
     HttpError         err;
