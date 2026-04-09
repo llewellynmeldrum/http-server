@@ -8,10 +8,12 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
+#include <sys/stat.h>
 #include <unistd.h>
 
 #include "ByteStream.h"
 #include "Globals.h"
+#include "HashMap.h"
 #include "HttpError.h"
 #include "HttpMetadata.h"
 #include "HttpParsing.h"
@@ -19,7 +21,6 @@
 #include "LString.h"
 #include "ServerTypes.h"
 #include "SocketWrapper.h"
-#include "StringMap.h"
 #include "StringView.h"
 
 #include "HttpRequest.h"
@@ -42,8 +43,207 @@ static void init_responders();
 
 static void* handle_client(void* arg);
 
+#define static_strlen(cstr) (sizeof(cstr) - 1)
+
+#define DECL_STRINGVIEW(cstr)                                                                      \
+    (StringView) {                                                                                 \
+        .ptr = cstr, .len = static_strlen(cstr)                                                    \
+    }
+
+#define DECL_SHORT_STRING(cstr)                                                                    \
+    (String) {                                                                                     \
+        .isShort = true, .short_data = cstr, .len = static_strlen(cstr)                            \
+    }
+
+#define DECL_LONG_STRING(cstr)                                                                     \
+    (String) {                                                                                     \
+        .isShort = false, .data = cstr, .len = (static_strlen(cstr)), .cap = static_strlen(cstr)   \
+    }
+#define DECL_STRING(cstr) DECL_LONG_STRING(cstr)
+// clang-format off
+String mimetype_vals[] = {
+    DECL_STRING("application/octet-stream"),
+    DECL_STRING("application/octet-stream"),
+    DECL_STRING("audio/aac"),
+    DECL_STRING("application/x-abiword"),
+    DECL_STRING("image/apng"),
+    DECL_STRING("application/x-freearc"),
+    DECL_STRING("image/avif"),
+    DECL_STRING("video/x-msvideo"),
+    DECL_STRING("application/vnd.amazon.ebook"),
+    DECL_STRING("application/octet-stream"),
+    DECL_STRING("image/bmp"),
+    DECL_STRING("application/x-bzip"),
+    DECL_STRING("application/x-bzip2"),
+    DECL_STRING("application/x-cdf"),
+    DECL_STRING("application/x-csh"),
+    DECL_STRING("text/css"),
+    DECL_STRING("text/csv"),
+    DECL_STRING("application/msword"),
+    DECL_STRING("application/vnd.openxmlformats-officedocument.wordprocessingml.document"),
+    DECL_STRING("application/vnd.ms-fontobject"),
+    DECL_STRING("application/epub+zip"),
+    DECL_STRING("application/gzip"),
+    DECL_STRING("image/gif"),
+    DECL_STRING("image/vnd.microsoft.icon"),
+    DECL_STRING("text/calendar"),
+    DECL_STRING("application/java-archive"),
+    DECL_STRING("text/javascript"),
+    DECL_STRING("application/json"),
+    DECL_STRING("application/ld+json"),
+    DECL_STRING("text/markdown"),
+    DECL_STRING("text/javascript"),
+    DECL_STRING("audio/mpeg"),
+    DECL_STRING("video/mp4"),
+    DECL_STRING("video/mpeg"),
+    DECL_STRING("application/vnd.apple.installer+xml"),
+    DECL_STRING("application/vnd.oasis.opendocument.presentation"),
+    DECL_STRING("application/vnd.oasis.opendocument.spreadsheet"),
+    DECL_STRING("application/vnd.oasis.opendocument.text"),
+    DECL_STRING("audio/ogg"),
+    DECL_STRING("video/ogg"),
+    DECL_STRING("application/ogg"),
+    DECL_STRING("audio/ogg"),
+    DECL_STRING("font/otf"),
+    DECL_STRING("image/png"),
+    DECL_STRING("application/pdf"),
+    DECL_STRING("application/x-httpd-php"),
+    DECL_STRING("application/vnd.ms-powerpoint"),
+    DECL_STRING("application/vnd.openxmlformats-officedocument.presentationml.presentation"),
+    DECL_STRING("application/vnd.rar"),
+    DECL_STRING("application/rtf"),
+    DECL_STRING("application/x-sh"),
+    DECL_STRING("image/svg+xml"),
+    DECL_STRING("application/x-tar"),
+    DECL_STRING("video/mp2t"),
+    DECL_STRING("font/ttf"),
+    DECL_STRING("text/plain"),
+    DECL_STRING("application/vnd.visio"),
+    DECL_STRING("audio/wav"),
+    DECL_STRING("audio/webm"),
+    DECL_STRING("video/webm"),
+    DECL_STRING("festapplication/manifest+json"),
+    DECL_STRING("image/webp"),
+    DECL_STRING("font/woff"),
+    DECL_STRING("font/woff2"),
+    DECL_STRING("application/xhtml+xml"),
+    DECL_STRING("application/vnd.ms-excel"),
+    DECL_STRING("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"),
+    DECL_STRING("application/xml"),
+    DECL_STRING("application/vnd.mozilla.xul+xml"),
+    DECL_STRING("application/zip"),
+    DECL_STRING("video/3gpp"),
+    DECL_STRING("video/3gpp2"),
+    DECL_STRING("application/x-7z-compressed"),
+    DECL_STRING("image/tiff"),
+    DECL_STRING("image/tiff"),
+    DECL_STRING("text/html"),
+    DECL_STRING("text/html"),
+    DECL_STRING("image/jpeg"),
+    DECL_STRING("image/jpeg"),
+    DECL_STRING("audio/midi"),
+    DECL_STRING("audio/midi"),
+};
+
+StringView mimetype_keys[] = {
+	DECL_STRINGVIEW(".bin"),
+	DECL_STRINGVIEW(".css"),
+	DECL_STRINGVIEW(".aac"),
+	DECL_STRINGVIEW(".abw"),
+	DECL_STRINGVIEW(".apng"),
+	DECL_STRINGVIEW(".arc"),
+	DECL_STRINGVIEW(".avif"),
+	DECL_STRINGVIEW(".avi"),
+	DECL_STRINGVIEW(".azw"),
+	DECL_STRINGVIEW(".bin"),
+	DECL_STRINGVIEW(".bmp"),
+	DECL_STRINGVIEW(".bz"),
+	DECL_STRINGVIEW(".bz2"),
+	DECL_STRINGVIEW(".cda"),
+	DECL_STRINGVIEW(".csh"),
+	DECL_STRINGVIEW(".css"),
+	DECL_STRINGVIEW(".csv"),
+	DECL_STRINGVIEW(".doc"),
+	DECL_STRINGVIEW(".docx"),
+	DECL_STRINGVIEW(".eot"),
+	DECL_STRINGVIEW(".epub"),
+	DECL_STRINGVIEW(".gz"),
+	DECL_STRINGVIEW(".gif"),
+	DECL_STRINGVIEW(".ico"),
+	DECL_STRINGVIEW(".ics"),
+	DECL_STRINGVIEW(".jar"),
+	DECL_STRINGVIEW(".js"),
+	DECL_STRINGVIEW(".json"),
+	DECL_STRINGVIEW(".jsonld"),
+	DECL_STRINGVIEW(".md"),
+	DECL_STRINGVIEW(".mjs"),
+	DECL_STRINGVIEW(".mp3"),
+	DECL_STRINGVIEW(".mp4"),
+	DECL_STRINGVIEW(".mpeg"),
+	DECL_STRINGVIEW(".mpkg"),
+	DECL_STRINGVIEW(".odp"),
+	DECL_STRINGVIEW(".ods"),
+	DECL_STRINGVIEW(".odt"),
+	DECL_STRINGVIEW(".oga"),
+	DECL_STRINGVIEW(".ogv"),
+	DECL_STRINGVIEW(".ogx"),
+	DECL_STRINGVIEW(".opus"),
+	DECL_STRINGVIEW(".otf"),
+	DECL_STRINGVIEW(".png"),
+	DECL_STRINGVIEW(".pdf"),
+	DECL_STRINGVIEW(".php"),
+	DECL_STRINGVIEW(".ppt"),
+	DECL_STRINGVIEW(".pptx"),
+	DECL_STRINGVIEW(".rar"),
+	DECL_STRINGVIEW(".rtf"),
+	DECL_STRINGVIEW(".sh"),
+	DECL_STRINGVIEW(".svg"),
+	DECL_STRINGVIEW(".tar"),
+	DECL_STRINGVIEW(".ts"),
+	DECL_STRINGVIEW(".ttf"),
+	DECL_STRINGVIEW(".txt"),
+	DECL_STRINGVIEW(".vsd"),
+	DECL_STRINGVIEW(".wav"),
+	DECL_STRINGVIEW(".weba"),
+	DECL_STRINGVIEW(".webm"),
+	DECL_STRINGVIEW(".webmani"),
+	DECL_STRINGVIEW(".webp"),
+	DECL_STRINGVIEW(".woff"),
+	DECL_STRINGVIEW(".woff2"),
+	DECL_STRINGVIEW(".xhtml"),
+	DECL_STRINGVIEW(".xls"),
+	DECL_STRINGVIEW(".xlsx"),
+	DECL_STRINGVIEW(".xml"),
+	DECL_STRINGVIEW(".xul"),
+	DECL_STRINGVIEW(".zip"),
+	DECL_STRINGVIEW(".3gp"),
+	DECL_STRINGVIEW(".3g2"),
+	DECL_STRINGVIEW(".7z"),
+	DECL_STRINGVIEW(".tif"),
+	DECL_STRINGVIEW(".tiff"),
+	DECL_STRINGVIEW(".htm"),
+	DECL_STRINGVIEW(".html"),
+	DECL_STRINGVIEW(".jpeg"),
+	DECL_STRINGVIEW(".jpg"),
+	DECL_STRINGVIEW(".mid"),
+	DECL_STRINGVIEW(".midi"),
+};
+// clang-format on
+
+static HashMap mimetype_map;  // <StringView, StringView>
+void           init_mimetypeMap(void) {
+    mimetype_map = hm_make(sv_hash, sv_hash_equal);
+
+    static_assert(arrlen(mimetype_keys) == arrlen(mimetype_vals),
+                  "Arrays must be of the same length");
+
+    for (size_t i = 0; i < arrlen(mimetype_keys); i++) {
+        hm_insert(&mimetype_map, &mimetype_keys[i], &mimetype_vals[i]);
+    }
+}
 static void init_static_data(void) {
-    init_percent_valmap();
+    init_percentEncodingMap();
+    init_mimetypeMap();
 }
 u64  program_epoch_ns;
 char document_root[PATH_MAX] = {};
@@ -106,29 +306,86 @@ struct HttpResponse {
 };
 typedef struct HttpResponse HttpResponse;
 
-HttpResponse generate_HttpResponse(HttpTarget target) {
+static void get_current_gmtime_str(char* buf, size_t len) {
+    time_t     raw_time;
+    struct tm* time_info;
+    time(&raw_time);
+    time_info = gmtime(&raw_time);
+    strftime(buf, len, "%a, %d %b %Y %H:%M:%S GMT", time_info);
+}
+
+static String HEADER_NAME_Date = DECL_STRING("Date");
+static String HEADER_NAME_Content_Type = DECL_STRING("Content-Type");
+static String HEADER_NAME_Content_Length = DECL_STRING("Content-Length");
+HttpResponse  generate_HttpResponse(HttpTarget target) {
+    // given some resource (which is essentially a resolved file path on the servers machine),
     HttpResponse res = {
         .version = HttpVersion_1_1,
         .resource_path = target.resolved_path,
     };
     if (target.hasError) {
-        // translate the error to the correct HttpResponse encoding
-        // could LOG_ERROR(err.info)
         res.status = target.err.code;
         res.headers = nullptr;
         res.header_count = 0;
         res.resource_fptr = nullptr;
         return res;
     }
-    // given some resource (which is essentially a resolved file path on the servers machine),
-    // 0. first check to see if there is already an error -> if so, generate the matching response.
-    // 1. check to make sure the requested file exists -> if not, resopnse=404.
-    // 2. check to make sure the file is accessible(?) -> if not, response=403
-    // 3. check to make sure the file is of a reasonable size
-    // 4. if all the checks pass, generate the structured HttpResponse, which will contain the
-    // status code, etc, everything needed to serialize the resultant response line, headers, and
-    // body.
-    return (HttpResponse){};
+    // NOTE: get file size for content-length
+    char path_cstr[PATH_MAX] = {};
+    str_cstr_buf(&res.resource_path, path_cstr);
+
+    struct stat st;
+    if (stat(path_cstr, &st) != 0) {
+        goto ERR_404_NOT_FOUND;
+    }
+    if (st.st_size >= MAX_FILE_SZ) {
+        goto ERR_413_CONTENT_TOO_LARGE;
+    }
+
+    constexpr size_t MAX_RESPONSE_HEADERS = 32;
+    HttpHeader       buf[MAX_RESPONSE_HEADERS] = {};
+    size_t           header_count = 0;
+
+    // NOTE: HEADER 1
+    // date: <gmt formatted date>
+    char buffer[80];
+    get_current_gmtime_str(buffer, arrlen(buffer));
+    printf("time: '%s'\n", buffer);
+    String date_value = str_make_cstr(buffer);
+    buf[header_count++] = responseHeader_make(&HEADER_NAME_Date, &date_value);
+
+    // NOTE: HEADER 2
+    // content-type: <mime-type>
+    size_t     last_dot = str_rfind(&res.resource_path, '.');
+    StringView file_ext = str_slice(&res.resource_path, last_dot, STR_END);
+    String     mimetype = *(String*)hm_find(&mimetype_map, &file_ext);
+    LOG_EXPR(file_ext);
+    LOG_EXPR(&mimetype);
+    buf[header_count++] = responseHeader_make(&HEADER_NAME_Content_Type, &mimetype);
+
+    // NOTE: HEADER 3
+    // content-length: <body-length>
+
+    String body_size_str = str_itos(st.st_size);
+    LOG_EXPR(st.st_size);
+
+    LOG_EXPR(&body_size_str);
+    buf[header_count++] = responseHeader_make(&HEADER_NAME_Content_Length, &body_size_str);
+    for (size_t i = 0; i < header_count; i++) {
+        char* str = header_toStr(buf[i]);
+        LOG_DEBUG("[%zu]='%s'", i, str);
+        free(str);
+    }
+    res.resource_fptr = fopen(path_cstr, "rb");
+    res.status = HttpStatus_OK;
+    return res;
+
+ERR_404_NOT_FOUND:
+    SET_RESP_ERROR(res, NOT_FOUND);
+    return res;
+ERR_413_CONTENT_TOO_LARGE:
+    SET_RESP_ERROR(res, CONTENT_TOO_LARGE);
+    return res;
 }
 
 // fat pointer style array
@@ -142,25 +399,53 @@ ByteArray                serialize_HttpResponse(HttpResponse response) {
     // Return a heap allocated byte array,
     return (ByteArray){};
 }
-void       init_percent_valmap(void);
+void       init_percentEncodingMap(void);
 HttpTarget resolve_HttpRequest(HttpRequest request);
 
+void HttpRequest_toStr(HttpRequest req, char* buf, size_t buflen) {
+    snprintf(buf,
+             BUF_SZ,
+             "HttpRequest {\n"
+             "    .method     = '%s'\n"
+             "    .target_sv  = '%s'\n"
+             "    .version    = '%s'\n"
+             "    .headers    = %s\n"
+             "} HttpRequest;",
+             HttpRequestMethod_toStr[req.method],
+             sv_cstr(req.target_sv),
+             HttpVersion_toStr[req.version],
+             header_array_ToStr(req.headers, req.num_headers));
+}
 #define TEST_HTTP_REQUEST(data) _TEST_HTTP_REQUEST(#data, data, arrlen(data))
 ByteArray _TEST_HTTP_REQUEST(const char* name, Byte* buf, int buf_len) {
     LOG_INFO("TEST(%s) -> %zuB:", name, buf_len);
     ByteStream  stream = bs_make(buf, buf_len);
     HttpRequest request = parse_HttpRequest(&stream);
-    HttpTarget  target = resolve_HttpRequest(request);
-    // TODO: implement V
+    char        req_cstr[BUF_SZ] = {};
+    HttpRequest_toStr(request, req_cstr, BUF_SZ);
+    LOG_DEBUG("%s", req_cstr);
+    HttpTarget   target = resolve_HttpRequest(request);
     HttpResponse response = generate_HttpResponse(target);
     // TODO: implement V
     ByteArray outgoing_data = serialize_HttpResponse(response);
+    /* INTENDED ORDER:
+    HttpRequest  request  = parse_HttpRequest(&stream);
+    HttpTarget resource = resolveRequest(http_request);
+    HttpResponse response = generateResponse(resource);
+    Byte*        outgoing_data = encodeResponse(response);
+    */
     printf("\n");
     return outgoing_data;
 }
 void* handle_client(void* arg) {
+    // TEST(percent_escapes)
 
-    Byte origin_GET[] = "GET /?idkthisisaquery HTTP/1.1\r\n"
+    // TODO: I have ported the percent encoding map over to the new map,
+    // now i need to construct the other hashmap for mime types.
+
+    //"%20%21%23%24%25%26%27%28%29%2A%2B%2C%2F%3A%3B%3D%3F%5B%5D%40";
+    Byte origin_GET[] = "GET /?idkthisisaquery "
+                        "HTTP/1.1\r\n"
                         "Host: example.com\r\n"
                         "User-Agent: curl/8.6.0\r\n"
                         "Accept: */*\r\n"
@@ -188,20 +473,13 @@ void* handle_client(void* arg) {
         "Accept: */*\r\n"
         "\r\n";
     TEST_HTTP_REQUEST(origin_GET);
-    TEST_HTTP_REQUEST(absolute_GET);
-    TEST_HTTP_REQUEST(absolute_GET_BAD_HOST);
-    TEST_HTTP_REQUEST(origin_GET_ESCAPE_DOCROOT);
-    TEST_HTTP_REQUEST(absolute_GET_ESCAPE_DOCROOT);
+    // TEST_HTTP_REQUEST(absolute_GET);
+    // TEST_HTTP_REQUEST(absolute_GET_BAD_HOST);
+    // TEST_HTTP_REQUEST(origin_GET_ESCAPE_DOCROOT);
+    // TEST_HTTP_REQUEST(absolute_GET_ESCAPE_DOCROOT);
 
     // TODO: Refactor some of the header only mess ive got going on.
     //       Move each stage to a separate module (.c/.h pair)
-    /*
-     * INTENDED ORDER:
-    HttpRequest  request  = parse_HttpRequest(&stream);
-    HttpTarget resource = resolveRequest(http_request);
-    HttpResponse response = generateResponse(resource);
-    Byte*        outgoing_data = encodeResponse(response);
-    */
     return nullptr;
 }
 

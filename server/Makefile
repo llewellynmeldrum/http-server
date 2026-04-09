@@ -88,6 +88,10 @@ tsan: CFLAGS+=-fsanitize=thread -fno-omit-frame-pointer -g
 tsan: LDFLAGS+=-fsanitize=thread -fno-omit-frame-pointer -g
 tsan: all
 
+ausan: CFLAGS+=-fsanitize=address,undefined -fno-omit-frame-pointer -g
+ausan: LDFLAGS+=-fsanitize=address,undefined -fno-omit-frame-pointer -g
+ausan: all
+
 # ---
 clean: 
 	rm -rf build bin

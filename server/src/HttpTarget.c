@@ -1,25 +1,10 @@
 #include "HttpTarget.h"
-#include "StringMap.h"
+#include "HashMap.h"
+#include "Logger.h"
+#include "macromagic.h"
 #include <limits.h>
-static StringMap        percent_encoding_map = {};
-const static StringView percent_keymap[] = {
-    (StringView){ .ptr = "%20", .len = 3 }, (StringView){ .ptr = "%21", .len = 3 },
-    (StringView){ .ptr = "%23", .len = 3 }, (StringView){ .ptr = "%24", .len = 3 },
-    (StringView){ .ptr = "%25", .len = 3 }, (StringView){ .ptr = "%26", .len = 3 },
-    (StringView){ .ptr = "%27", .len = 3 }, (StringView){ .ptr = "%28", .len = 3 },
-    (StringView){ .ptr = "%29", .len = 3 }, (StringView){ .ptr = "%2A", .len = 3 },
-    (StringView){ .ptr = "%2B", .len = 3 }, (StringView){ .ptr = "%2C", .len = 3 },
-    (StringView){ .ptr = "%2F", .len = 3 }, (StringView){ .ptr = "%3A", .len = 3 },
-    (StringView){ .ptr = "%3B", .len = 3 }, (StringView){ .ptr = "%3D", .len = 3 },
-    (StringView){ .ptr = "%3F", .len = 3 }, (StringView){ .ptr = "%5B", .len = 3 },
-    (StringView){ .ptr = "%5D", .len = 3 }, (StringView){ .ptr = "%40", .len = 3 },
+static HashMap percent_encoding_map = {};
 
-};
-const static VAL_T percent_valmap[] = {
-    ' ', '!', '#', '$', '%', '&', '\'', '(', ')', '*',
-    '+', ',', '/', ':', ';', '=', '?',  '[', ']', '@',
-
-};
 static String resolve_TargetPath(StringView raw_target);
 static String resolve_absoluteForm(StringView raw_target);
 static String normalize_Path(String path);
@@ -53,12 +38,14 @@ HttpTarget resolve_HttpRequest(HttpRequest request) {
     }
     char  buf[PATH_MAX];
     char* normalized_cstr = str_cstr_buf(&normalized_path, buf);
+    // WARNING: realpath allocates when called in this manner.
     char* resolved_path_cstr = realpath(normalized_cstr, nullptr);
     if (!resolved_path_cstr) {
+        // could print errno inf/use it in error code?
         goto ERR_404_NOT_FOUND;
     }
-    String resolved_path = str_make_cstr(resolved_path_cstr);
-    if (!str_hasPrefix(&resolved_path, RESOLVED_DOCROOT)) {
+    res.resolved_path = str_make_cstr(resolved_path_cstr);
+    if (!str_hasPrefix(&res.resolved_path, RESOLVED_DOCROOT)) {
         goto ERR_403_FORBIDDEN;
     }
 
@@ -120,8 +107,8 @@ static String decode_percentEscapes(String path) {
     for (size_t i = 0; i < path.len; i++) {
         if (i < path.len - lookahead_dist && str_at(&path, i) == '%') {
             StringView slice = str_slice(&path, i, i + lookahead_dist);
-            if (sm_contains(&percent_encoding_map, slice)) {
-                const char repl = sm_find(&percent_encoding_map, slice);
+            if (hm_contains(&percent_encoding_map, &slice)) {
+                const char repl = *(char*)hm_find(&percent_encoding_map, &slice);
                 str_append_ch(&res, repl);
                 i += lookahead_dist;  // skip the chars
                 continue;
@@ -175,6 +162,7 @@ String decode_upwardPathing(String path) {
     }
     return res;
 }
+
 static String normalize_Path(String path) {
     String no_percents = decode_percentEscapes(path);
     //   LOG_EXPR(&no_percents);
@@ -223,8 +211,62 @@ static String resolve_TargetPath(StringView raw_target) {
         break;
     }
 }
-void init_percent_valmap(void) {
-    percent_encoding_map = sm_make();
-    sm_mapArrays(&percent_encoding_map, percent_keymap, percent_valmap, 20);
+
+// clang-format off
+static StringView percent_keymap[] = {
+    (StringView){ .ptr = "%20", .len = 3 },
+    (StringView){ .ptr = "%21", .len = 3 },
+    (StringView){ .ptr = "%23", .len = 3 },
+    (StringView){ .ptr = "%24", .len = 3 },
+    (StringView){ .ptr = "%25", .len = 3 },
+    (StringView){ .ptr = "%26", .len = 3 },
+    (StringView){ .ptr = "%27", .len = 3 },
+    (StringView){ .ptr = "%28", .len = 3 },
+    (StringView){ .ptr = "%29", .len = 3 },
+    (StringView){ .ptr = "%2A", .len = 3 },
+    (StringView){ .ptr = "%2B", .len = 3 },
+    (StringView){ .ptr = "%2C", .len = 3 },
+    (StringView){ .ptr = "%2F", .len = 3 },
+    (StringView){ .ptr = "%3A", .len = 3 },
+    (StringView){ .ptr = "%3B", .len = 3 },
+    (StringView){ .ptr = "%3D", .len = 3 },
+    (StringView){ .ptr = "%3F", .len = 3 },
+    (StringView){ .ptr = "%5B", .len = 3 },
+    (StringView){ .ptr = "%5D", .len = 3 },
+    (StringView){ .ptr = "%40", .len = 3 },
+
+};
+static char percent_valmap[] = {
+    ' ',
+    '!',
+    '#',
+    '$',
+    '%',
+    '&',
+    '\'',
+    '(',
+    ')',
+    '*',
+    '+',
+    ',',
+    '/',
+    ':',
+    ';',
+    '=',
+    '?',
+     '[',
+    ']',
+    '@',
+};
+// clang-format on
+void init_percentEncodingMap(void) {
+    percent_encoding_map = hm_make(sv_hash, sv_hash_equal);
+
+    static_assert(arrlen(percent_keymap) == arrlen(percent_valmap),
+                  "Arrays must be of the same length");
+
+    for (size_t i = 0; i < arrlen(percent_keymap); i++) {
+        hm_insert(&percent_encoding_map, &percent_keymap[i], &percent_valmap[i]);
+    }
     //    sm_print(&percent_encoding_map);
 }

@@ -22,6 +22,14 @@ static const StringView NULL_STRINGVIEW = {
     .ptr = nullptr,
 };
 
+static inline char* sv_cstr_buf(const StringView sv, char* buf, size_t buflen) {
+    if (sv.len == 0) {
+        return buf;
+    }
+    memset(buf, 0x0, buflen);
+    snprintf(buf, sv.len + 1, "%.*s", (int)sv.len, sv.ptr);
+    return buf;
+}
 static inline char* sv_cstr(const StringView sv) {
     if (sv.len == 0) {
         return "";
@@ -33,8 +41,8 @@ static inline char* sv_cstr(const StringView sv) {
     return cstr;
 }
 #define sv_print(sv) _SV_PRINT(#sv, sv, __FILE_NAME__, __LINE__)
-static inline const char* _SV_PRINT(const char* prefix, const StringView sv, const char* filename,
-                                    int line) {
+static inline const char*
+_SV_PRINT(const char* prefix, const StringView sv, const char* filename, int line) {
     char* cstr = sv_cstr(sv);
     printf("[%s:%d]: len:%zu %s='%s'\n", filename, line, sv.len, prefix, cstr);
     // BUG: leak, only for debugging so should be fine
@@ -64,17 +72,6 @@ static const StringView OWS = { " \t", 2, false };
 
 static const StringView COLON = { ":", 1, false };
 
-struct HttpHeader {
-    StringView name;
-    StringView value;
-};
-typedef struct HttpHeader HttpHeader;
-static inline HttpHeader  header_make(StringView l, StringView r) {
-    return (HttpHeader){
-        .name = l,
-        .value = r,
-    };
-}
 static inline StringView sv_make(char* cstr) {
     return (StringView){
         .ptr = (Byte*)cstr,
@@ -160,13 +157,24 @@ static inline StringView sv_copy(const StringView self, Byte* copybuf) {
     return copy;
 }
 static constexpr size_t SV_NOT_FOUND = (size_t)0 - 1;
-static inline size_t    sv_find(const StringView self, const char ch) {
+// Finds first match from the **LEFT** hand side.
+static inline size_t sv_find(const StringView self, const char ch) {
     assert(self.len > 0);
-    sv_print(self);
+    //    sv_print(self);
     for (int i = 0; i < self.len; i++) {
         if (self.ptr[i] == ch) {
             return i;
-            fprintf(stderr, "FOUND!! %d", i);
+        }
+    }
+    return SV_NOT_FOUND;
+}
+// Finds first match from the **RIGHT** hand side.
+static inline size_t sv_rfind(const StringView self, const char ch) {
+    assert(self.len > 0);
+    //    sv_print(self);
+    for (int i = self.len - 1; i >= 0; i++) {
+        if (self.ptr[i] == ch) {
+            return i;
         }
     }
     return SV_NOT_FOUND;
@@ -215,4 +223,18 @@ static inline void sv_toUpper(StringView sv, const char s) {
         }
     }
 }
-// bullshit:
+
+static inline bool sv_hash_equal(void* key1, void* key2) {
+    return sv_equal(*(StringView*)key1, *(StringView*)key2);
+}
+static inline size_t sv_hash(void* key_ptr) {
+    StringView       key = *(StringView*)key_ptr;
+    constexpr size_t BIG_ASS_PRIME = 1572869;
+    size_t           sum = 0;
+    for (size_t i = 0; i < key.len; i++) {
+        sum += sv_at(key, i);
+        sum *= BIG_ASS_PRIME;
+    }
+    //    printf("idx:%zu\n", idx);
+    return sum;
+}

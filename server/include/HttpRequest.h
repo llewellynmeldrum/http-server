@@ -1,5 +1,6 @@
 #pragma once
 #include "HttpError.h"
+#include "HttpHeader.h"
 #include "HttpMetadata.h"
 #include "StringView.h"
 typedef enum {

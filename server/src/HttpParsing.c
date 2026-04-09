@@ -53,7 +53,7 @@ HttpRequest parse_HttpRequest(ByteStream* stream) {
         StringView field_value = bs_consumeUntil(stream, CRLF);
         field_value = sv_strip(field_value, OWS);
         //        sv_print(field_value);
-        headers[res.num_headers++] = header_make(field_name, field_value);
+        headers[res.num_headers++] = requestHeader_make(field_name, field_value);
         (void)bs_consumeN(stream, 2);  // skip 'CRLF'
     }
     if (res.num_headers >= 1) {

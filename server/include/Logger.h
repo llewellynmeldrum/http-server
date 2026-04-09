@@ -9,10 +9,10 @@
 
 #include "AnsiColors.h"
 #include "ErrnoDefs.h"
-#include "HttpHeader.h"
 #include "HttpMetadata.h"
 #include "HttpRequest.h"
 #include "NativeTimer.h"
+#include "StringView.h"
 #include "cstrHelpers.h"
 
 #define OSTREAM stdout
@@ -165,16 +165,7 @@ static LogSettings log_settings;
     X(uint64_t, UINT64_T_FMT, val)                                                                 \
     X(long, "%ld", val)                                                                            \
     X(double, "%lf", val)                                                                          \
-    X(bool, "%s", (val ? "true" : "false"))                                                        \
-    X(HttpRequest,                                                                                 \
-      "HttpRequest {\n"                                                                            \
-      "    .method     = '%s'\n"                                                                   \
-      "    .target_sv  = '%s'\n"                                                                   \
-      "    .version    = '%s'\n"                                                                   \
-      "    .headers    = %s\n"                                                                     \
-      "} HttpRequest;",                                                                            \
-      HttpRequestMethod_toStr[val.method], sv_cstr(val.target_sv), HttpVersion_toStr[val.version], \
-      header_array_ToStr(val.headers, val.num_headers))
+    X(bool, "%s", (val ? "true" : "false"))
 
 #define X(T, fmt, ...)                                                                             \
     static inline const char* T##_toStr(T val) {                                                   \
@@ -197,7 +188,6 @@ X_LIST_TYPENAMES
         long: long_toStr, \
         double: double_toStr, \
         bool: bool_toStr, \
-        HttpRequest: HttpRequest_toStr, \
         StringView: sv_cstr, \
         String*: str_cstr, \
         default: int_toStr)(x)

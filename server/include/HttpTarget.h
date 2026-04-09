@@ -1,4 +1,5 @@
 #pragma once
+#include "HttpRequest.h"
 #include "LString.h"
 #include <stdio.h>
 struct HttpTarget {
@@ -8,5 +9,5 @@ struct HttpTarget {
 };
 typedef struct HttpTarget HttpTarget;
 
-void       init_percent_valmap(void);
+void       init_percentEncodingMap(void);
 HttpTarget resolve_HttpRequest(HttpRequest request);

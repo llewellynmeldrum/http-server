@@ -1,11 +1,10 @@
 #pragma once
 #include <assert.h>
 
-#include "Logger.h"
 #include "StringView.h"
-
-#include "CWrappers.h"
 static constexpr size_t SSO_CAP = 25;
+static constexpr size_t STR_NOT_FOUND = (size_t)0 - 1;
+static constexpr size_t STR_END = (size_t)0 - 1;
 struct String {
     bool isShort;
     union {
@@ -61,8 +60,21 @@ static inline char str_at(const String* self, size_t n) {
 static inline char str_last(String* self) {
     return str_at(self, self->len - 1);
 }
-static inline void str_set(String* self, size_t n, const char ch) {
-    *(str_ptr(self) + n) = ch;
+// **ASSUMES `pos` IS IN BOUNDS!**
+// (does **NOT** perform a `str_reserve()`)
+static inline void str_set(String* self, size_t pos, const char ch) {
+    *(str_ptr(self) + pos) = ch;
+}
+static inline void str_insert_ch(String* self, size_t idx, const char ch) {
+    if (idx < self->len) {
+        str_set(self, idx, ch);
+        return;
+    }
+    // else, we have to extend
+    size_t pos = self->len;
+    str_reserve(self, self->len + 1);
+    self->len++;
+    str_set(self, pos, ch);
 }
 
 static inline bool str_equal(const String* self, const String* other) {
@@ -95,11 +107,17 @@ static inline void str_append_ch(String* self, const char ch) {
     self->len++;
     str_set(self, pos, ch);
 }
-static constexpr size_t STR_NOT_FOUND = (size_t)0 - 1;
 
 // starting at `from`, return the first index of `ch`. `STR_NOT_FOUND` if nothing.
 static inline size_t str_find(String* self, const char ch, const size_t from) {
     for (size_t i = from; i < self->len; i++) {
+        if (str_at(self, i) == ch)
+            return i;
+    }
+    return STR_NOT_FOUND;
+}
+static inline size_t str_rfind(String* self, const char ch) {
+    for (size_t i = self->len; i >= 0; i--) {
         if (str_at(self, i) == ch)
             return i;
     }
@@ -133,26 +151,6 @@ static inline String str_make_cstr(char* cstr) {
     }
     res.len = len;
     res.isNull = false;
-    free(cstr);
-    return res;
-}
-[[nodiscard("Returns an allocated buffer.")]]
-static inline String str_make_cstr_static(const char* cstr) {
-    String res = {};
-    size_t len = strlen(cstr);
-    if (len <= SSO_CAP) {
-        res.isShort = true;
-        res.len = len;
-        if (len > 0) {
-            memcpy(res.short_data, cstr, len);
-        }
-    } else {
-        res.isShort = false;
-        res.data = calloc(len, sizeof(char));
-        memcpy(res.data, cstr, len);
-    }
-    res.len = len;
-    res.isNull = false;
     return res;
 }
 static inline String str_make(StringView sv) {
@@ -170,22 +168,36 @@ static inline String str_make(StringView sv) {
     res.isNull = false;
     return res;
 }
-static inline void str_delete(String* str) {
-    if (str->isShort) {
+// # Delete in the c++ meaning -> free
+// Clears `self`'s contents, **freeing** its buffer, and **setting it to null**
+static inline void str_delete(String* self) {
+    if (self->isShort) {
         // no free needed
-        memset(str->short_data, 'X', SSO_CAP);
+        memset(self->short_data, '\0', SSO_CAP);
     } else {
-        memset(str->data, 'X', str->len);
-        free(str->data);
-        str->len = -1;
+        memset(self->data, '\0', self->len);
+        free(self->data);
+        self->len = -1;
     }
-    str->isNull = true;
+    self->isNull = true;
 }
+// Clears `self`'s contents, **without freeing** its buffer, and **without setting it to null**
+static inline void str_clear(String* self, int num) {
+    if (self->isShort) {
+        memset(self->short_data, '\0', SSO_CAP);
+    } else {
+        memset(self->data, '\0', self->len);
+    }
+    self->isShort = true;
+    self->len = 0;
+}
+
 //  `start` is **inclusive**
 //  `end`   is **inclusive**
 static inline StringView str_slice(String* self, size_t start, size_t end) {
-    // hello_worl
-    // 0123456789
+    if (end == STR_END) {
+        end = self->len - 1;
+    }
     return (StringView){
         .ptr = str_ptr(self) + start,
         .len = end - start + 1,
@@ -205,13 +217,12 @@ static inline StringView str_slice_ex(String* self, size_t start, size_t end) {
     };
 }
 static inline char* str_cstr_buf(String* self, char* buf) {
-    snprintf(buf, self->len + 1, "%s", str_ptr(self));
-    // BUG: leak, only for debugging so should be fine
+    snprintf(buf, self->len + 1, "%.*s", (int)self->len, str_ptr(self));
     return buf;
 }
 static inline char* str_cstr(String* self) {
     char* cstr = calloc(self->len + 1, 1);
-    snprintf(cstr, self->len + 1, "%s", str_ptr(self));
+    snprintf(cstr, self->len + 1, "%.*s", (int)self->len, str_ptr(self));
     // BUG: leak, only for debugging so should be fine
     return cstr;
 }
@@ -260,4 +271,35 @@ static inline bool str_append_sv(String* self, const StringView sv) {
         str_append_ch(self, sv_at(sv, i));
     }
     return true;
+}
+// Creates a **short** string containing the **base-10** digits of `num`
+static inline String str_itos(int num) {
+    String           res = str_make_empty();
+    constexpr size_t MAX_DIGITS = 10;
+    int              copy = num;
+    size_t           dig_count = 0;
+    while (copy > 0) {
+        copy /= 10;
+        dig_count++;
+    }
+    if (dig_count >= MAX_DIGITS) {
+        return str_make_cstr("What the fuck are you doing that for");
+    }
+    if (num == 0) {
+        str_reserve(&res, 1);
+        str_set(&res, 0, '0');
+        return res;
+    }
+    res.len = dig_count;
+    // str_reserve(&res, dig_count);
+
+    for (size_t i = 0; i < dig_count; i++) {
+        // construct it backwards
+        size_t idx = dig_count - i - 1;
+        char   dig = '0' + (num % 10);
+        str_set(&res, idx, dig);
+        num /= 10;
+    }
+
+    return res;
 }

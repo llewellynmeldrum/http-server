@@ -1,15 +1,23 @@
 #pragma once
 // clang-format off
-    #define SET_ERROR(res, status)\
-    LOG_ERROR("%d %s",HttpStatus_##status,#status);\
+    #define SET_ERROR(res, err_status)\
+    LOG_ERROR("%d %s",HttpStatus_##err_status,#err_status);\
     res.hasError=true;\
     res.err = (HttpError){\
-        .code = HttpStatus_##status,\
+        .code = HttpStatus_##err_status,\
         .src = (ErrorSource){\
             .line= __LINE__,\
             .name= __FILE_NAME__,\
         },\
     };
+    #define SET_RESP_ERROR(res, err_status)\
+    LOG_ERROR("%d %s",HttpStatus_##err_status,#err_status);\
+    res.status = HttpStatus_##err_status;\
+    res.headers = nullptr;  /* not sure about this */\
+    res.header_count = 0;   /* not sure about this */\
+    res.resource_fptr = nullptr;\
+    return res;
+
 typedef enum {
     HttpStatus_CONTINUE                           = 100,
     HttpStatus_SWITCHING_PROTOCOLS                = 101,
