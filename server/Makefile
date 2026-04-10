@@ -2,13 +2,14 @@
 # ---
 #MAKEFLAGS   +=-j8
 
-CC			:=clang
+CC			:=clang-22
 CPPFLAGS    :=-Iinclude
 CFLAGS      :=-std=gnu23
 CFLAGS      +=-Wall -Werror
 CFLAGS      +=-Wimplicit-fallthrough
 CFLAGS      +=-Wno-unused
 CFLAGS      +=-MMD -MP
+CFLAGS		+=-fdebug-prefix-map=$(PWD)=.
 CFLAGS      +=-fno-show-column
 CFLAGS      +=-fno-diagnostics-show-option
 CFLAGS      +=-fdiagnostics-fixit-info
@@ -44,6 +45,7 @@ test: $(TEST_EXES)
 
 build: $(APP_EXE)
 run: $(APP_EXE)
+	
 	@cols=$$(tput cols); \
 	bg=$$(tput setab 1; tput smul); \
 	fg=$$(tput setaf 7); \
@@ -80,17 +82,23 @@ $(TEST_EXES): ./bin/test/%: ./build/test/%.o $(CORE_OBJ)
 
 -include $(APP_DEPS) $(TEST_DEPS)
 
-asan: CFLAGS+=-fsanitize=address -fno-omit-frame-pointer -g
+asan: export ASAN_OPTIONS=detect_leaks=0
+asan: CFLAGS+=-fsanitize=address -fno-omit-frame-pointer  -g
 asan: LDFLAGS+=-fsanitize=address -fno-omit-frame-pointer -g
-asan:clean  all
+asan: clean all
+
+lsan: export ASAN_OPTIONS=detect_leaks=1
+lsan: CFLAGS+=-fsanitize=address -fno-omit-frame-pointer  -g
+lsan: LDFLAGS+=-fsanitize=address -fno-omit-frame-pointer -g
+lsan: clean all
 
 tsan: CFLAGS+=-fsanitize=thread -fno-omit-frame-pointer -g
 tsan: LDFLAGS+=-fsanitize=thread -fno-omit-frame-pointer -g
-tsan: all
+tsan: clean all
 
 ausan: CFLAGS+=-fsanitize=address,undefined -fno-omit-frame-pointer -g
 ausan: LDFLAGS+=-fsanitize=address,undefined -fno-omit-frame-pointer -g
-ausan: all
+ausan: clean all
 
 # ---
 clean: 
