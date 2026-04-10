@@ -6,7 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define ENABLE_MEMCPY_DEBUG
+// #define ENABLE_MEMCPY_DEBUG
 static int  ___global = 0;
 static char memcpy_hint[BUF_SZ] = "";
 

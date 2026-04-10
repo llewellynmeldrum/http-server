@@ -402,6 +402,7 @@ ByteArray                serialize_HttpResponse(HttpResponse resp) {
     String res = str_make_empty();
     str_append_cstr(&res, HttpVersion_toStr[resp.version]);
     str_append_cstr(&res, " ");
+    LOG_EXPR(resp.status);
     str_append_cstr(&res, HttpStatus_toStr[resp.status]);
     str_append_cstr(&res, " ");
     str_append_sv(&res, CRLF);
@@ -420,6 +421,7 @@ ByteArray                serialize_HttpResponse(HttpResponse resp) {
         LOG_EXPR(&resp.headers[i].response_val);
         str_append_str(&res, &resp.headers[i].response_val);
     }
+    // TODO:  finish serialization
     LOG_EXPR(&res);
     return (ByteArray){};
 }

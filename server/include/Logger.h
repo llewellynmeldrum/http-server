@@ -160,15 +160,16 @@ static LogSettings log_settings;
 
 // clang-format on
 #define X_LIST_TYPENAMES                                                                           \
-    X(int, "%d", val)                                                                              \
-    X(char, "'%c'", val)                                                                           \
-    X(uint64_t, UINT64_T_FMT, val)                                                                 \
-    X(long, "%ld", val)                                                                            \
-    X(double, "%lf", val)                                                                          \
-    X(bool, "%s", (val ? "true" : "false"))
+    X(const char*, cstr, "%s", val)                                                                \
+    X(int, int, "%d", val)                                                                         \
+    X(char, char, "'%c'", val)                                                                     \
+    X(uint64_t, uint64_t, UINT64_T_FMT, val)                                                       \
+    X(long, long, "%ld", val)                                                                      \
+    X(double, double, "%lf", val)                                                                  \
+    X(bool, bool, "%s", (val ? "true" : "false"))
 
-#define X(T, fmt, ...)                                                                             \
-    static inline const char* T##_toStr(T val) {                                                   \
+#define X(T, fn_prefix, fmt, ...)                                                                  \
+    static inline const char* fn_prefix##_toStr(T val) {                                           \
         char* buf = calloc(BUF_SZ, sizeof(char));                                                  \
         snprintf(buf, BUF_SZ, "%s ", #T);                                                          \
         snprintf(buf, BUF_SZ, fmt, ##__VA_ARGS__);                                                 \
@@ -189,6 +190,8 @@ X_LIST_TYPENAMES
         double: double_toStr, \
         bool: bool_toStr, \
         StringView: sv_cstr, \
+        char*: cstr_toStr,\
+        const char*: cstr_toStr,\
         String*: str_cstr, \
         default: int_toStr)(x)
 // clang-format on

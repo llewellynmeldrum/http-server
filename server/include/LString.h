@@ -233,7 +233,6 @@ static inline bool str_append_cstr(String* self, const char* cstr) {
 static inline bool str_append_str(String* self, String* other) {
     str_reserve(self, self->len + other->len);
     for (size_t i = 0; i < other->len; i++) {
-        printf("[%zu]%c,\n", i, str_at(other, i));
         str_append_ch(self, str_at(other, i));
     }
     return true;
