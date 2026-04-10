@@ -6,7 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-// #define ENABLE_MEMCPY_DEBUG
+#define ENABLE_MEMCPY_DEBUG
 static int  ___global = 0;
 static char memcpy_hint[BUF_SZ] = "";
 
@@ -45,12 +45,21 @@ static inline char* ptr_details(const void* ptr, int count, const char* hint) {
 #define SET_MEMCPY_HINT(hint) strncpy(memcpy_hint, #hint, BUF_SZ);
 #ifdef ENABLE_MEMCPY_DEBUG
 #undef memcpy
-static inline void logged_memcpy(void* dest, const void* src, size_t count, const char* filename,
-                                 size_t line, const char* hint) {
+static inline void logged_memcpy(void*       dest,
+                                 const void* src,
+                                 size_t      count,
+                                 const char* filename,
+                                 size_t      line,
+                                 const char* hint) {
     char* src_details = ptr_details(src, count, hint);
     char* dest_details = ptr_details(dest, count, hint);
-    log_internal(LogLevel_DEBUG, filename, line, "copying %zuB from: %s to %s. ", count,
-                 src_details, dest_details);
+    log_internal(LogLevel_DEBUG,
+                 filename,
+                 line,
+                 "copying %zuB from: %s to %s. ",
+                 count,
+                 src_details,
+                 dest_details);
     memcpy(dest, src, count);
     free(src_details);
     free(dest_details);

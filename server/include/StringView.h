@@ -12,7 +12,6 @@
 struct StringView {
     Byte*  ptr;
     size_t len;
-    bool   alloced;
 };
 // **NON OWNING**, length-based string class.
 typedef struct StringView StringView;
@@ -59,24 +58,32 @@ static const StringView EMPTY = { "", 0 };
 static const StringView FSLASH = { "/", 1 };
 static const StringView INDEX_HTML = { "index.html", 10 };
 static const StringView DOCROOT = { "../www", 6 };
-#ifdef __APPLE__
+
+static const StringView RESOLVED_DOCROOT = { "/Users/llewie/code/proj/arch-http/www", 37 };
+/*
+#if defined(__APPLE__)
 static const StringView RESOLVED_DOCROOT = { "/Users/llewie/code/proj/arch-http/www", 37 };
 #else
 #error "havent set this up"
 static const StringView RESOLVED_DOCROOT = { "", 37 };
-
 #endif
+*/
 
 // **HTAB|SP**
-static const StringView OWS = { " \t", 2, false };
+static const StringView OWS = {
+    " \t",
+    2,
+};
 
-static const StringView COLON = { ":", 1, false };
+static const StringView COLON = {
+    ":",
+    1,
+};
 
 static inline StringView sv_make(char* cstr) {
     return (StringView){
         .ptr = (Byte*)cstr,
         .len = cstr ? strlen(cstr) : 0,
-        .alloced = false,
     };
 }
 static inline char sv_at(const StringView sv, const size_t i) {

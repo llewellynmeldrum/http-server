@@ -2,18 +2,12 @@
 #include <assert.h>
 
 #include "StringView.h"
-static constexpr size_t SSO_CAP = 25;
 static constexpr size_t STR_NOT_FOUND = (size_t)0 - 1;
+
 static constexpr size_t STR_END = (size_t)0 - 1;
 struct String {
-    bool isShort;
-    union {
-        struct {
-            char*  data;
-            size_t cap;
-        };
-        char short_data[SSO_CAP];
-    };
+    char*  ptr;
+    size_t cap;
     size_t len;
     bool   isNull;
 };
@@ -24,48 +18,33 @@ static const String NULL_STRING = {
     .isNull = true,
 };
 
-static inline bool str_reserve(String* self, size_t new_len) {
-    if (self->isShort && new_len > SSO_CAP) {
-        char copybuf[SSO_CAP] = {};
-        memcpy(copybuf, self->short_data, self->len);
-        self->isShort = false;
-        self->data = calloc(new_len, sizeof(char));
-        memcpy(self->data, copybuf, self->len);
-    }
-
-    if (!(self->isShort) && new_len > SSO_CAP) {
-        self->data = realloc(self->data, new_len);
-        self->cap = new_len;
-    }
-    if (!(self->isShort) && new_len <= SSO_CAP) {
-        char copybuf[SSO_CAP] = {};
-        memcpy(copybuf, self->data, self->len);
-        free(self->data);
-        self->isShort = true;
-        memcpy(self->short_data, copybuf, self->len);
-        self->cap = new_len;
-    }
-    return true;  // TODO: implement error checks
+static inline bool str_reserve(String* self, size_t new_cap) {
+    self->ptr = realloc(self->ptr, new_cap);
+    self->cap = new_cap;
+    return true;
 }
 
-static inline char* str_ptr(String* self) {
-    return self->isShort ? self->short_data : self->data;
-}
 static inline char* str_end(String* self) {
-    return str_ptr(self) + self->len;
+    return self->ptr + self->len;
 }
+
 static inline char str_at(const String* self, size_t n) {
-    return self->isShort ? self->short_data[n] : self->data[n];
+    assert(self);
+    assert(n < self->len);
+    return self->ptr[n];
 }
+
 static inline char str_last(String* self) {
     return str_at(self, self->len - 1);
 }
+
 // **ASSUMES `pos` IS IN BOUNDS!**
 // (does **NOT** perform a `str_reserve()`)
 static inline void str_set(String* self, size_t pos, const char ch) {
-    *(str_ptr(self) + pos) = ch;
+    *(self->ptr + pos) = ch;
 }
-static inline void str_insert_ch(String* self, size_t idx, const char ch) {
+
+static inline void str_set_append(String* self, size_t idx, const char ch) {
     if (idx < self->len) {
         str_set(self, idx, ch);
         return;
@@ -117,7 +96,7 @@ static inline size_t str_find(String* self, const char ch, const size_t from) {
     return STR_NOT_FOUND;
 }
 static inline size_t str_rfind(String* self, const char ch) {
-    for (size_t i = self->len; i >= 0; i--) {
+    for (size_t i = self->len - 1; i >= 0; i--) {
         if (str_at(self, i) == ch)
             return i;
     }
@@ -127,43 +106,24 @@ static inline size_t str_rfind(String* self, const char ch) {
 // be heap allocated, and MUST be deleted (else a leak)
 static inline String str_make_empty(void) {
     return (String){
-        .isShort = true,
         .isNull = false,
         .len = 0,
-        .short_data = {},
     };
 }
-// **FREES THE BUFFER! This should only take malloced strings which are ready to be freed.**
 [[nodiscard("Returns an allocated buffer.")]]
 static inline String str_make_cstr(char* cstr) {
     String res = {};
     size_t len = strlen(cstr);
-    if (len <= SSO_CAP) {
-        res.isShort = true;
-        res.len = len;
-        if (len > 0) {
-            memcpy(res.short_data, cstr, len);
-        }
-    } else {
-        res.isShort = false;
-        res.data = calloc(len, sizeof(char));
-        memcpy(res.data, cstr, len);
-    }
+    res.ptr = calloc(len, sizeof(char));
+    memcpy(res.ptr, cstr, len);
     res.len = len;
     res.isNull = false;
     return res;
 }
 static inline String str_make(StringView sv) {
     String res = {};
-    if (sv.len <= SSO_CAP) {
-        res.isShort = true;
-        res.len = sv.len;
-        memcpy(res.short_data, sv.ptr, sv.len);
-    } else {
-        res.isShort = false;
-        res.data = calloc(sv.len, sizeof(char));
-        memcpy(res.data, sv.ptr, sv.len);
-    }
+    res.ptr = calloc(sv.len, sizeof(char));
+    memcpy(res.ptr, sv.ptr, sv.len);
     res.len = sv.len;
     res.isNull = false;
     return res;
@@ -171,25 +131,14 @@ static inline String str_make(StringView sv) {
 // # Delete in the c++ meaning -> free
 // Clears `self`'s contents, **freeing** its buffer, and **setting it to null**
 static inline void str_delete(String* self) {
-    if (self->isShort) {
-        // no free needed
-        memset(self->short_data, '\0', SSO_CAP);
-    } else {
-        memset(self->data, '\0', self->len);
-        free(self->data);
-        self->len = -1;
-    }
+    memset(self->ptr, '\0', self->len);
+    free(self->ptr);
+    self->len = -1;
     self->isNull = true;
 }
 // Clears `self`'s contents, **without freeing** its buffer, and **without setting it to null**
 static inline void str_clear(String* self, int num) {
-    if (self->isShort) {
-        memset(self->short_data, '\0', SSO_CAP);
-    } else {
-        memset(self->data, '\0', self->len);
-    }
-    self->isShort = true;
-    self->len = 0;
+    memset(self->ptr, '\0', self->len);
 }
 
 //  `start` is **inclusive**
@@ -199,7 +148,7 @@ static inline StringView str_slice(String* self, size_t start, size_t end) {
         end = self->len - 1;
     }
     return (StringView){
-        .ptr = str_ptr(self) + start,
+        .ptr = self->ptr + start,
         .len = end - start + 1,
     };
 }
@@ -212,17 +161,17 @@ static inline StringView str_slice_ex(String* self, size_t start, size_t end) {
         end = self->len;
     }
     return (StringView){
-        .ptr = str_ptr(self) + start,
+        .ptr = self->ptr + start,
         .len = end - start,
     };
 }
 static inline char* str_cstr_buf(String* self, char* buf) {
-    snprintf(buf, self->len + 1, "%.*s", (int)self->len, str_ptr(self));
+    snprintf(buf, self->len + 1, "%.*s", (int)self->len, self->ptr);
     return buf;
 }
 static inline char* str_cstr(String* self) {
     char* cstr = calloc(self->len + 1, 1);
-    snprintf(cstr, self->len + 1, "%.*s", (int)self->len, str_ptr(self));
+    snprintf(cstr, self->len + 1, "%.*s", (int)self->len, self->ptr);
     // BUG: leak, only for debugging so should be fine
     return cstr;
 }
@@ -252,16 +201,18 @@ static inline StringView* str_splitOnEach(String* self, const char delim, size_t
     memcpy(res, buf, sizeof(StringView) * count);
     return res;
 }
+
 static inline void str_print(String* self) {
-    printf("%.*s\n", (int)self->len, str_ptr(self));
+    printf("%.*s\n", (int)self->len, self->ptr);
 }
+
 static inline bool str_prepend_sv(String* self, const StringView sv) {
     str_reserve(self, self->len + sv.len);
-    void* dest = str_ptr(self) + sv.len;  // move everything forward by one
-    void* src = str_ptr(self);            // move everything forward by one
+    void* dest = self->ptr + sv.len;  // move everything forward by one
+    void* src = self->ptr;            // move everything forward by one
     memmove(dest, src, self->len);
     self->len += sv.len;
-    memmove(str_ptr(self), sv.ptr, sv.len);
+    memmove(self->ptr, sv.ptr, sv.len);
 
     return true;
 }
@@ -269,6 +220,21 @@ static inline bool str_append_sv(String* self, const StringView sv) {
     str_reserve(self, self->len + sv.len);
     for (size_t i = 0; i < sv.len; i++) {
         str_append_ch(self, sv_at(sv, i));
+    }
+    return true;
+}
+static inline bool str_append_cstr(String* self, const char* cstr) {
+    str_reserve(self, self->len + strlen(cstr));
+    for (size_t i = 0; i < strlen(cstr); i++) {
+        str_append_ch(self, cstr[i]);
+    }
+    return true;
+}
+static inline bool str_append_str(String* self, String* other) {
+    str_reserve(self, self->len + other->len);
+    for (size_t i = 0; i < other->len; i++) {
+        printf("[%zu]%c,\n", i, str_at(other, i));
+        str_append_ch(self, str_at(other, i));
     }
     return true;
 }
@@ -291,7 +257,7 @@ static inline String str_itos(int num) {
         return res;
     }
     res.len = dig_count;
-    // str_reserve(&res, dig_count);
+    str_reserve(&res, dig_count);
 
     for (size_t i = 0; i < dig_count; i++) {
         // construct it backwards

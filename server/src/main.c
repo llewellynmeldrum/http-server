@@ -26,7 +26,8 @@
 #include "HttpRequest.h"
 #include "macromagic.h"
 
-pthread_t                 client_handler_thread;
+pthread_t client_handler_thread;
+
 static const unsigned int HTTP_TCP_PORT = 80;
 
 #define LOGGER_DISABLE_TIMER
@@ -50,14 +51,9 @@ static void* handle_client(void* arg);
         .ptr = cstr, .len = static_strlen(cstr)                                                    \
     }
 
-#define DECL_SHORT_STRING(cstr)                                                                    \
-    (String) {                                                                                     \
-        .isShort = true, .short_data = cstr, .len = static_strlen(cstr)                            \
-    }
-
 #define DECL_LONG_STRING(cstr)                                                                     \
     (String) {                                                                                     \
-        .isShort = false, .data = cstr, .len = (static_strlen(cstr)), .cap = static_strlen(cstr)   \
+        .ptr = cstr, .len = (static_strlen(cstr)), .cap = static_strlen(cstr)                      \
     }
 #define DECL_STRING(cstr) DECL_LONG_STRING(cstr)
 // clang-format off
@@ -302,7 +298,9 @@ struct HttpResponse {
     HttpStatus  status;
     HttpHeader* headers;
     size_t      header_count;
-    FILE*       resource_fptr;
+
+    size_t resource_size;
+    FILE*  resource_fptr;
 };
 typedef struct HttpResponse HttpResponse;
 
@@ -327,10 +325,10 @@ HttpResponse  generate_HttpResponse(HttpTarget target) {
         res.status = target.err.code;
         res.headers = nullptr;
         res.header_count = 0;
+        res.resource_size = 0;
         res.resource_fptr = nullptr;
         return res;
     }
-    // NOTE: get file size for content-length
     char path_cstr[PATH_MAX] = {};
     str_cstr_buf(&res.resource_path, path_cstr);
 
@@ -338,12 +336,13 @@ HttpResponse  generate_HttpResponse(HttpTarget target) {
     if (stat(path_cstr, &st) != 0) {
         goto ERR_404_NOT_FOUND;
     }
-    if (st.st_size >= MAX_FILE_SZ) {
+    res.resource_size = st.st_size;
+    if (res.resource_size >= MAX_FILE_SZ) {
         goto ERR_413_CONTENT_TOO_LARGE;
     }
 
     constexpr size_t MAX_RESPONSE_HEADERS = 32;
-    HttpHeader       buf[MAX_RESPONSE_HEADERS] = {};
+    HttpHeader       header_buf[MAX_RESPONSE_HEADERS] = {};
     size_t           header_count = 0;
 
     // NOTE: HEADER 1
@@ -352,30 +351,34 @@ HttpResponse  generate_HttpResponse(HttpTarget target) {
     get_current_gmtime_str(buffer, arrlen(buffer));
     printf("time: '%s'\n", buffer);
     String date_value = str_make_cstr(buffer);
-    buf[header_count++] = responseHeader_make(&HEADER_NAME_Date, &date_value);
+    header_buf[header_count++] = responseHeader_make(HEADER_NAME_Date, date_value);
 
     // NOTE: HEADER 2
     // content-type: <mime-type>
     size_t     last_dot = str_rfind(&res.resource_path, '.');
     StringView file_ext = str_slice(&res.resource_path, last_dot, STR_END);
     String     mimetype = *(String*)hm_find(&mimetype_map, &file_ext);
-    LOG_EXPR(file_ext);
-    LOG_EXPR(&mimetype);
-    buf[header_count++] = responseHeader_make(&HEADER_NAME_Content_Type, &mimetype);
+    //    LOG_EXPR(file_ext);
+    //    LOG_EXPR(&mimetype);
+    header_buf[header_count++] = responseHeader_make(HEADER_NAME_Content_Type, mimetype);
 
     // NOTE: HEADER 3
     // content-length: <body-length>
+    String body_size_str = str_itos(res.resource_size);
+    //    LOG_EXPR(st.st_size);
 
-    String body_size_str = str_itos(st.st_size);
-    LOG_EXPR(st.st_size);
+    //   LOG_EXPR(&body_size_str);
+    header_buf[header_count++] = responseHeader_make(HEADER_NAME_Content_Length, body_size_str);
 
-    LOG_EXPR(&body_size_str);
-    buf[header_count++] = responseHeader_make(&HEADER_NAME_Content_Length, &body_size_str);
+    // NOTE: Allocate proper header buffer
+    res.headers = calloc(sizeof(HttpHeader), header_count);
     for (size_t i = 0; i < header_count; i++) {
-        char* str = header_toStr(buf[i]);
+        memcpy(&res.headers[i], &header_buf[i], sizeof(HttpHeader));
+        char* str = header_toStr(res.headers[i]);
         LOG_DEBUG("[%zu]='%s'", i, str);
         free(str);
     }
+    res.header_count = header_count;
     res.resource_fptr = fopen(path_cstr, "rb");
     res.status = HttpStatus_OK;
     return res;
@@ -394,9 +397,30 @@ struct ByteArray {
     size_t len;
 };
 typedef struct ByteArray ByteArray;
-ByteArray                serialize_HttpResponse(HttpResponse response) {
-    // given some response, serialize its fields.
-    // Return a heap allocated byte array,
+ByteArray                serialize_HttpResponse(HttpResponse resp) {
+    // status-line = HTTP-version SP status-code SP [ reason-phrase ] CRLF
+    String res = str_make_empty();
+    str_append_cstr(&res, HttpVersion_toStr[resp.version]);
+    str_append_cstr(&res, " ");
+    str_append_cstr(&res, HttpStatus_toStr[resp.status]);
+    str_append_cstr(&res, " ");
+    str_append_sv(&res, CRLF);
+
+    for (size_t i = 0; i < resp.header_count; i++) {
+        char* str = header_toStr(resp.headers[i]);
+        LOG_DEBUG("[%zu]='%s'", i, str);
+        free(str);
+    }
+    // *( field-line CRLF )
+    //                CRLF
+    for (size_t i = 0; i < resp.header_count; i++) {
+        LOG_EXPR(&resp.headers[i].response_name);
+        str_append_str(&res, &resp.headers[i].response_name);
+        str_append_sv(&res, COLON);
+        LOG_EXPR(&resp.headers[i].response_val);
+        str_append_str(&res, &resp.headers[i].response_val);
+    }
+    LOG_EXPR(&res);
     return (ByteArray){};
 }
 void       init_percentEncodingMap(void);
@@ -426,8 +450,7 @@ ByteArray _TEST_HTTP_REQUEST(const char* name, Byte* buf, int buf_len) {
     LOG_DEBUG("%s", req_cstr);
     HttpTarget   target = resolve_HttpRequest(request);
     HttpResponse response = generate_HttpResponse(target);
-    // TODO: implement V
-    ByteArray outgoing_data = serialize_HttpResponse(response);
+    ByteArray    outgoing_data = serialize_HttpResponse(response);
     /* INTENDED ORDER:
     HttpRequest  request  = parse_HttpRequest(&stream);
     HttpTarget resource = resolveRequest(http_request);
