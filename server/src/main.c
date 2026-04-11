@@ -1,6 +1,7 @@
 #include <arpa/inet.h>
 #include <assert.h>
 #include <limits.h>
+#include <math.h>
 #include <netinet/in.h>
 #include <pthread.h>
 #include <signal.h>
@@ -11,6 +12,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+#include "ByteArray.h"
 #include "ByteStream.h"
 #include "Globals.h"
 #include "HashMap.h"
@@ -241,6 +243,7 @@ static void init_static_data(void) {
     init_percentEncodingMap();
     init_mimetypeMap();
 }
+
 u64  program_epoch_ns;
 char document_root[PATH_MAX] = {};
 
@@ -294,6 +297,7 @@ void init_responders(void) {
 struct HttpResponse {
     const HttpVersion version;
 
+    bool        hasResource;
     String      resource_path;
     HttpStatus  status;
     HttpHeader* headers;
@@ -320,6 +324,7 @@ HttpResponse  generate_HttpResponse(HttpTarget target) {
     HttpResponse res = {
         .version = HttpVersion_1_1,
         .resource_path = target.resolved_path,
+        .hasResource = false,
     };
     if (target.hasError) {
         res.status = target.err.code;
@@ -380,6 +385,10 @@ HttpResponse  generate_HttpResponse(HttpTarget target) {
     }
     res.header_count = header_count;
     res.resource_fptr = fopen(path_cstr, "rb");
+    if (!res.resource_fptr || ferror(res.resource_fptr)) {
+        goto ERR_404_NOT_FOUND;
+    }
+    res.hasResource = true;
     res.status = HttpStatus_OK;
     return res;
 
@@ -391,39 +400,92 @@ ERR_413_CONTENT_TOO_LARGE:
     return res;
 }
 
-// fat pointer style array
-struct ByteArray {
-    Byte*  ptr;
-    size_t len;
-};
-typedef struct ByteArray ByteArray;
-ByteArray                serialize_HttpResponse(HttpResponse resp) {
+void ba_appendString(ByteArray* ba, const String str) {
+    if (str.len > ba_remaining(ba)) {
+        LOG_ERROR("String too large to append to ByteArray");
+        return;
+    }
+    memcpy(ba_front(ba), str.ptr, str.len);
+    ba_advance(ba, str.len);
+}
+void ba_appendFileContents(ByteArray* ba, FILE* fptr, size_t file_sz) {
+
+    if (!ba) {
+        LOG_ERROR("!ba");
+        return;
+    }
+    if (!fptr) {
+        LOG_ERROR("!fptr");
+        return;
+    }
+    if (ferror(fptr)) {
+        LOG_ERROR("ferror");
+        LOG_ERRNO();
+        return;
+    }
+    if (ba_remaining(ba) < file_sz) {
+        LOG_ERROR("not enough space in buffer");
+    }
+    constexpr size_t chunk_size = 4096;  // change to 65536
+    const size_t     chunk_count = ceil((double)file_sz / chunk_size);
+    for (size_t i = 0; i < chunk_count; i++) {
+        size_t read_size = chunk_size;
+        if (i == chunk_count - 1) {
+            LOG_DEBUG("Reading remainder  %zu bytes.", file_sz % chunk_size);
+            read_size = ba->cap % chunk_size;
+        }
+        size_t num_chunks_read = fread(ba->ptr + ba->len, read_size, 1, fptr);
+        if (num_chunks_read == 0) {
+            // BUG: ?
+        }
+        ba->len += num_chunks_read * read_size;
+        LOG_DEBUG("Read %zu/%zu bytes.", ba->len, file_sz);
+    }
+    LOG_DEBUG("Read %zu/%zu bytes.", ba->len, file_sz);
+}
+
+ByteArray serialize_HttpResponse(HttpResponse resp) {
     // status-line = HTTP-version SP status-code SP [ reason-phrase ] CRLF
-    String res = str_make_empty();
-    str_append_cstr(&res, HttpVersion_toStr[resp.version]);
-    str_append_cstr(&res, " ");
+    String status_line = str_make_empty();
+    str_append_cstr(&status_line, HttpVersion_toStr[resp.version]);
+    str_append_cstr(&status_line, " ");
     LOG_EXPR(resp.status);
-    str_append_cstr(&res, HttpStatus_toStr[resp.status]);
-    str_append_cstr(&res, " ");
-    str_append_sv(&res, CRLF);
+    str_append_cstr(&status_line, HttpStatus_toStr[resp.status]);
+    str_append_cstr(&status_line, " ");
+    str_append_sv(&status_line, CRLF);
 
     for (size_t i = 0; i < resp.header_count; i++) {
         char* str = header_toStr(resp.headers[i]);
         LOG_DEBUG("[%zu]='%s'", i, str);
         free(str);
     }
+    String header_lines = str_make_empty();
     // *( field-line CRLF )
     //                CRLF
     for (size_t i = 0; i < resp.header_count; i++) {
-        LOG_EXPR(&resp.headers[i].response_name);
-        str_append_str(&res, &resp.headers[i].response_name);
-        str_append_sv(&res, COLON);
-        LOG_EXPR(&resp.headers[i].response_val);
-        str_append_str(&res, &resp.headers[i].response_val);
+        //        LOG_EXPR(&resp.headers[i].response_name);
+        str_append_str(&header_lines, &resp.headers[i].response_name);
+        str_append_sv(&header_lines, SP);
+        str_append_sv(&header_lines, COLON);
+        str_append_sv(&header_lines, SP);
+        //        LOG_EXPR(&resp.headers[i].response_val);
+        str_append_str(&header_lines, &resp.headers[i].response_val);
+        str_append_sv(&header_lines, CRLF);
     }
-    // TODO:  finish serialization
-    LOG_EXPR(&res);
-    return (ByteArray){};
+    str_append_sv(&header_lines, CRLF);  // indicates the end of headers, now onto body
+
+    size_t    res_len = status_line.len + header_lines.len + resp.resource_size;
+    ByteArray res = ba_make(res_len);
+    ba_appendString(&res, status_line);
+    ba_appendString(&res, header_lines);
+    LOG_EXPR(resp.hasResource);
+    if (resp.hasResource) {
+        //        printLongBuffer(status_line.ptr, status_line.len);
+        ba_appendFileContents(&res, resp.resource_fptr, resp.resource_size);
+        // printLongBuffer(res.ptr, res.len);
+        fclose(resp.resource_fptr);
+    }
+    return res;
 }
 void       init_percentEncodingMap(void);
 HttpTarget resolve_HttpRequest(HttpRequest request);
@@ -453,13 +515,7 @@ ByteArray _TEST_HTTP_REQUEST(const char* name, Byte* buf, int buf_len) {
     HttpTarget   target = resolve_HttpRequest(request);
     HttpResponse response = generate_HttpResponse(target);
     ByteArray    outgoing_data = serialize_HttpResponse(response);
-    /* INTENDED ORDER:
-    HttpRequest  request  = parse_HttpRequest(&stream);
-    HttpTarget resource = resolveRequest(http_request);
-    HttpResponse response = generateResponse(resource);
-    Byte*        outgoing_data = encodeResponse(response);
-    */
-    printf("\n");
+    printLongBuffer(outgoing_data.ptr, outgoing_data.len);
     return outgoing_data;
 }
 void* handle_client(void* arg) {

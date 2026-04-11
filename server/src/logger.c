@@ -34,13 +34,8 @@ void LOG_LOWER_SEPARATOR() {
 }
 
 /* Whether or not to print a \n IFF CRLF (windows style), or to ignore CR.*/
-#define DBPRINTBUF_CRLF_ONLY true
+#define DBPRINTBUF_CRLF_ONLY false
 
-// printLongBuffer(const char* buf, size_t sz)
-// printBuffer(const char* buf, size_t sz) - single line
-// print a buffer with info on nonprintable chars
-void printBuffer(const char* buf, size_t sz) {
-}
 void print_buffer_verbose(const char* title, const char* buf, size_t sz, size_t nlines) {
     log_trace(UNDERBOLD);
     log_trace(UNDERBOLD "%s: (%p)", title, title);

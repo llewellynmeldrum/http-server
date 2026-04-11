@@ -16,6 +16,7 @@
     res.headers = nullptr;  /* not sure about this */\
     res.header_count = 0;   /* not sure about this */\
     res.resource_fptr = nullptr;\
+    res.hasResource=false;\
     return res;
 
 typedef enum {

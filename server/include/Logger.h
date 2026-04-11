@@ -17,6 +17,11 @@
 
 #define OSTREAM stdout
 
+// print a buffer with info on nonprintable chars
+#define printLongBuffer(buf, sz) print_buffer_verbose(#buf, buf, sz, 0)
+
+// printBuffer(const char* buf, size_t sz) - single line
+#define printBuffer(buf, sz) print_buffer_verbose(#buf, buf, sz, 1)
 static inline void log_trace(const char* fmt, ...) {
     va_list ap;
     va_start(ap, fmt);
