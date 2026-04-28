@@ -1,3 +1,4 @@
+NOTE: branch [/api-redesign](https://github.com/llewellynmeldrum/http-server/tree/api-redesign) has a (mostly) refactored but still slightly broken version
 # HTTP Server
 
 This is an extremely barebones `HTTP/1.1` web server built in C, using `sockets.h` and pretty much nothing else. 
